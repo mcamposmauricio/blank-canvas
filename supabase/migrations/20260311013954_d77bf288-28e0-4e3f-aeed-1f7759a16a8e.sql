@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_banners ADD COLUMN has_decorations boolean DEFAULT false;

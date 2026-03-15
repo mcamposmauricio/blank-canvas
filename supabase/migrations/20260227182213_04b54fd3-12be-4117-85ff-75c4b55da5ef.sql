@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_rooms ADD COLUMN attendant_last_read_at timestamptz;

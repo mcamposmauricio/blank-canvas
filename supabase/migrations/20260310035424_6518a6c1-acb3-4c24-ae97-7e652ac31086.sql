@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_banners ADD COLUMN auto_assign_by_rules boolean NOT NULL DEFAULT false;

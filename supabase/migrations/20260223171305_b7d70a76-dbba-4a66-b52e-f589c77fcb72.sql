@@ -1,0 +1,1 @@
+ALTER TABLE chat_settings ADD COLUMN widget_button_shape text NOT NULL DEFAULT 'circle';

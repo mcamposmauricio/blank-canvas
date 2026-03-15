@@ -1,0 +1,1 @@
+ALTER TABLE chat_settings ADD COLUMN allow_multiple_chats boolean NOT NULL DEFAULT false;

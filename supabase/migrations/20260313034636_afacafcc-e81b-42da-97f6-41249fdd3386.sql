@@ -1,0 +1,1 @@
+ALTER TABLE chat_auto_rules ALTER COLUMN close_resolution_status SET DEFAULT 'inactive';

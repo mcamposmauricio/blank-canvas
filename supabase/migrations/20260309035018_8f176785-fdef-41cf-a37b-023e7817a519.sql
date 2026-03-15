@@ -1,0 +1,2 @@
+ALTER TABLE public.leads ALTER COLUMN company DROP NOT NULL;
+ALTER TABLE public.leads ALTER COLUMN role DROP NOT NULL;

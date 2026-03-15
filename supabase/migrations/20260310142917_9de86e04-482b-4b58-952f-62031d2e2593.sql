@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_auto_rules ADD COLUMN close_resolution_status text NOT NULL DEFAULT 'archived';

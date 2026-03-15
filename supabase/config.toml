@@ -1,0 +1,43 @@
+project_id = "mfmkxpdufcbwydixbbbe"
+
+[functions.process-automatic-campaigns]
+verify_jwt = false
+
+[functions.send-response-notification]
+verify_jwt = false
+
+[functions.test-email-config]
+verify_jwt = false
+
+[functions.check-nps-pending]
+verify_jwt = false
+
+[functions.submit-embedded-response]
+verify_jwt = false
+
+[functions.get-visitor-banners]
+verify_jwt = false
+
+[functions.vote-banner]
+verify_jwt = false
+
+[functions.resolve-chat-visitor]
+verify_jwt = false
+
+[functions.import-external-data]
+verify_jwt = false
+
+[functions.assign-chat-room]
+verify_jwt = false
+
+[functions.process-chat-auto-rules]
+verify_jwt = false
+
+[functions.backoffice-admin]
+verify_jwt = false
+
+[functions.get-widget-config]
+verify_jwt = false
+
+[functions.process-chat-broadcasts]
+verify_jwt = false
