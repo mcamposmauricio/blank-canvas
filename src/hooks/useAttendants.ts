@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AttendantProfile {
   id: string;
@@ -15,19 +16,22 @@ interface AttendantProfile {
 }
 
 export function useAttendants() {
+  const { tenantId } = useAuth();
   const [attendants, setAttendants] = useState<AttendantProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAttendants = useCallback(async () => {
+    if (!tenantId) { setLoading(false); return; }
     setLoading(true);
     const { data } = await supabase
       .from("attendant_profiles")
       .select("*")
+      .eq("tenant_id", tenantId)
       .order("display_name");
 
     setAttendants((data as AttendantProfile[]) ?? []);
     setLoading(false);
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     fetchAttendants();

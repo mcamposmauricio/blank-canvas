@@ -50,9 +50,11 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
         .eq("tenant_id", currentTenantId);
       attendants = data ?? [];
     } else if (adminStatus) {
-      const { data: allData } = await supabase
+      let adminQuery = supabase
         .from("attendant_profiles")
         .select("id, display_name, user_id, status, active_conversations");
+      if (currentTenantId) adminQuery = adminQuery.eq("tenant_id", currentTenantId);
+      const { data: allData } = await adminQuery;
       const allAttendants = allData ?? [];
 
       if (myProfile) {
