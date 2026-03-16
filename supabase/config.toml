@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.check-nps-pending]
 verify_jwt = false
+
+[functions.backoffice-admin]
+verify_jwt = false
