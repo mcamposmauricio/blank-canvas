@@ -121,7 +121,6 @@ const Auth = () => {
         body: {
           action: "accept-invite",
           inviteToken: inviteProfile.invite_token,
-          userId: authUser.id,
           displayName: authUser.user_metadata?.display_name || inviteProfile.display_name,
         },
       });
