@@ -74,7 +74,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // All other actions require master role
+    // All other actions require authentication + master role
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No auth header" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const { data: masterCheck } = await adminClient.from("user_roles").select("role").eq("user_id", user.id).eq("role", "master").maybeSingle();
     if (!masterCheck) {
       return new Response(JSON.stringify({ error: "Forbidden: master role required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
