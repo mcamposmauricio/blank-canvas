@@ -62,13 +62,14 @@ const TeamSettingsTab = () => {
   const [companyCounts, setCompanyCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (tenantId) loadData();
+  }, [tenantId]);
 
   const loadData = async () => {
+    if (!tenantId) return;
     setLoading(true);
     const [{ data: profilesData }, { data: rolesData }] = await Promise.all([
-      supabase.from("user_profiles").select("*").order("created_at"),
+      supabase.from("user_profiles").select("*").eq("tenant_id", tenantId).order("created_at"),
       supabase.from("user_roles").select("user_id, role"),
     ]);
     
