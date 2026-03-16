@@ -20,8 +20,8 @@ Deno.serve(async (req) => {
 
     // accept-invite does NOT require auth — validated by invite_token
     if (action === "accept-invite") {
-      const { inviteToken, userId, displayName } = params;
-      if (!inviteToken || !userId) throw new Error("inviteToken and userId required");
+      const { inviteToken, displayName, password } = params;
+      if (!inviteToken) throw new Error("inviteToken required");
 
       const { data: profile, error: profileErr } = await adminClient
         .from("user_profiles")
@@ -30,6 +30,35 @@ Deno.serve(async (req) => {
         .eq("invite_status", "pending")
         .maybeSingle();
       if (profileErr || !profile) throw new Error("Invalid or expired invite");
+
+      let userId: string;
+
+      // Check if auth user already exists
+      const { data: allUsers } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+      const existingAuthUser = allUsers?.users?.find((u: any) => u.email === profile.email);
+
+      if (existingAuthUser) {
+        userId = existingAuthUser.id;
+        // Ensure email is confirmed (retroactive fix)
+        if (!existingAuthUser.email_confirmed_at) {
+          await adminClient.auth.admin.updateUserById(userId, { email_confirm: true });
+        }
+        // Update password if provided
+        if (password) {
+          await adminClient.auth.admin.updateUserById(userId, { password });
+        }
+      } else {
+        // Create new auth user already confirmed, no email sent
+        if (!password) throw new Error("Password required for new users");
+        const { data: newUser, error: createErr } = await adminClient.auth.admin.createUser({
+          email: profile.email,
+          password,
+          email_confirm: true,
+          user_metadata: { display_name: displayName || profile.email.split("@")[0] },
+        });
+        if (createErr) throw createErr;
+        userId = newUser.user!.id;
+      }
 
       // Update profile
       const { error: updateErr } = await adminClient.from("user_profiles").update({
@@ -66,6 +95,7 @@ Deno.serve(async (req) => {
           name: displayName || profile.email.split("@")[0],
           email: profile.email,
           specialty: profile.specialty,
+          tenant_id: profile.tenant_id,
         });
       }
 
