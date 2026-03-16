@@ -84,58 +84,27 @@ const Auth = () => {
     if (!inviteProfile) return;
     setLoading(true);
     try {
-      let userId: string;
-
-      if (isExistingUser && authUser) {
-        // Existing user accepting invite for a new tenant — no need to sign up
-        userId = authUser.id;
-      } else {
-        // Try to sign in first (user might already have an auth account)
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: inviteProfile.email,
-          password,
-        });
-
-        if (signInData?.user) {
-          // Existing auth user — login succeeded
-          userId = signInData.user.id;
-          setIsExistingUser(true);
-        } else {
-          // New user — sign up
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: inviteProfile.email,
-            password,
-            options: {
-              data: { display_name: displayName || inviteProfile.display_name },
-              emailRedirectTo: `${window.location.origin}/dashboard`,
-            },
-          });
-          if (signUpError) throw signUpError;
-          userId = signUpData.user?.id || "";
-          if (!userId) throw new Error("User creation failed");
-        }
-      }
-
-      // Call edge function to accept invite (bypasses RLS for role creation)
+      // Edge function handles user creation/confirmation via Admin API
       const { data: acceptData, error: acceptError } = await supabase.functions.invoke("backoffice-admin", {
         body: {
           action: "accept-invite",
           inviteToken: inviteProfile.invite_token,
-          userId,
           displayName: displayName || inviteProfile.display_name,
+          password,
         },
       });
       if (acceptError) throw new Error(acceptError.message || "Failed to accept invite");
       if (acceptData?.error) throw new Error(acceptData.error);
 
-      if (isExistingUser) {
-        toast({ title: "Convite aceito!", description: "Você agora tem acesso à nova plataforma." });
-        // Force reload to pick up new tenant
-        window.location.href = "/nps/dashboard";
-      } else {
-        toast({ title: t("auth.signupSuccess"), description: t("auth.checkEmail") });
-        navigate("/auth", { replace: true });
-      }
+      // Auto-login after invite accepted
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email: inviteProfile.email,
+        password,
+      });
+      if (loginError) throw loginError;
+
+      toast({ title: "Convite aceito!", description: "Bem-vindo à plataforma." });
+      window.location.href = "/nps/dashboard";
     } catch (error: any) {
       toast({ title: t("auth.error"), description: error.message, variant: "destructive" });
     } finally {
@@ -152,7 +121,6 @@ const Auth = () => {
         body: {
           action: "accept-invite",
           inviteToken: inviteProfile.invite_token,
-          userId: authUser.id,
           displayName: authUser.user_metadata?.display_name || inviteProfile.display_name,
         },
       });
