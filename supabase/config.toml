@@ -1,1 +1,25 @@
 project_id = "ydnblcgygkbqioowbnhz"
+
+[functions.get-widget-config]
+verify_jwt = false
+
+[functions.resolve-chat-visitor]
+verify_jwt = false
+
+[functions.assign-chat-room]
+verify_jwt = false
+
+[functions.submit-embedded-response]
+verify_jwt = false
+
+[functions.get-visitor-banners]
+verify_jwt = false
+
+[functions.dismiss-banner]
+verify_jwt = false
+
+[functions.vote-banner]
+verify_jwt = false
+
+[functions.check-nps-pending]
+verify_jwt = false
