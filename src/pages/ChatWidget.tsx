@@ -52,6 +52,10 @@ const ChatWidget = () => {
 
   const isResolvedVisitor = !!paramVisitorToken && !!paramOwnerUserId;
 
+  const resolvedOwnerRef = useRef<string | null>(null);
+  const resolvedContactIdRef = useRef<string | null>(null);
+  const resolvedCompanyContactIdRef = useRef<string | null>(null);
+
   const [isOpen, setIsOpen] = useState(!isEmbed);
   const [phase, setPhase] = useState<WidgetPhase>("form");
   const [visitorToken, setVisitorToken] = useState<string | null>(null);
