@@ -1,32 +1,56 @@
 
 
-# Plano: Seed de 5 Empresas + 5 Contatos de Teste
+# Fix: Bug de timezone no relatório CSAT
 
-## O que será feito
+## Diagnóstico
 
-Criar uma edge function temporária `seed-test-data` que insere no tenant `50740c0a-af12-4c44-abb7-95999dc6e172` (seu tenant):
+Analisei todos os arquivos que fazem parsing de `dateFrom`/`dateTo` para queries ao Supabase:
 
-### 5 Empresas (tabela `contacts`, `is_company = true`)
-| Nome | Email | CNPJ | Setor | Cidade/UF |
-|---|---|---|---|---|
-| Tech Solutions Ltda | contato@techsolutions.com.br | 12345678000190 | Tecnologia | São Paulo/SP |
-| Agro Forte SA | contato@agroforte.com.br | 98765432000110 | Agronegócio | Ribeirão Preto/SP |
-| Educação Digital ME | admin@edudigital.com.br | 11223344000155 | Educação | Curitiba/PR |
-| Saúde Mais Ltda | contato@saudemais.com.br | 55667788000199 | Saúde | Belo Horizonte/MG |
-| Logística Express SA | ops@logexpress.com.br | 99887766000133 | Logística | Rio de Janeiro/RJ |
+| Arquivo | Parsing | Status |
+|---|---|---|
+| `src/hooks/useCSATReport.ts` | `new Date(filters.dateFrom)` (sem T00:00:00) | **BUGADO** |
+| `src/hooks/useDashboardStats.ts` | `new Date(filters.dateFrom + "T00:00:00")` | OK |
+| `src/pages/AdminDashboard.tsx` | `new Date(filters.dateFrom + "T00:00:00")` | OK |
+| `src/pages/AdminChatHistory.tsx` | `new Date(dateFrom + "T00:00:00")` | OK |
+| `src/hooks/useChatHistory.ts` | Recebe datas já processadas do AdminChatHistory | OK |
 
-### 5 Contatos (tabela `company_contacts`, 1 por empresa)
-| Nome | Email | Cargo | Depto | Empresa |
-|---|---|---|---|---|
-| Carlos Silva | carlos@techsolutions.com.br | CTO | Tecnologia | Tech Solutions |
-| Maria Oliveira | maria@agroforte.com.br | Gerente Comercial | Vendas | Agro Forte |
-| João Santos | joao@edudigital.com.br | Diretor Acadêmico | Educação | Educação Digital |
-| Ana Costa | ana@saudemais.com.br | Coordenadora | Operações | Saúde Mais |
-| Pedro Lima | pedro@logexpress.com.br | Gerente de Logística | Operações | Logística Express |
+**Apenas `useCSATReport.ts` tem o bug.** Os outros arquivos já usam o sufixo `"T00:00:00"` que força o parsing como horário local.
 
-## Implementacao
+## O bug
 
-1. Criar edge function `seed-test-data` que usa service role key para inserir os dados (bypass RLS)
-2. Deploy e executar a function uma vez
-3. Deletar a edge function após execução (dados já persistidos)
+```typescript
+// BUGADO — "2026-03-17" é parseado como UTC midnight (00:00 UTC = 21:00 BRT dia anterior)
+startDate = new Date(filters.dateFrom).toISOString();
+
+// dateTo também bugado — setDate opera em local mas a base é UTC
+const d = new Date(filters.dateTo); d.setDate(d.getDate() + 1); endDate = d.toISOString();
+```
+
+## Correção
+
+Arquivo: `src/hooks/useCSATReport.ts`, linhas 62-71
+
+```typescript
+// dateFrom: parsear como meia-noite LOCAL
+if (filters.dateFrom) {
+  startDate = new Date(filters.dateFrom + "T00:00:00").toISOString();
+} else {
+  // ... switch case inalterado
+}
+
+// dateTo: parsear como meia-noite LOCAL do dia seguinte
+if (filters.dateTo) {
+  const d = new Date(filters.dateTo + "T00:00:00");
+  d.setDate(d.getDate() + 1);
+  endDate = d.toISOString();
+}
+```
+
+Mesma correção aplicada na segunda query paginada (linhas ~128-130).
+
+## Escopo
+
+- **1 arquivo alterado**: `src/hooks/useCSATReport.ts`
+- **0 migrações SQL**
+- **0 mudanças de frontend**
 
