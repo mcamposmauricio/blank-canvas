@@ -60,7 +60,7 @@ export function useCSATReport(filters: CSATReportFilters) {
     let endDate: string | null = null;
 
     if (filters.dateFrom) {
-      startDate = new Date(filters.dateFrom).toISOString();
+      startDate = new Date(filters.dateFrom + "T00:00:00").toISOString();
     } else {
       switch (filters.period) {
         case "today": startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(); break;
@@ -68,7 +68,7 @@ export function useCSATReport(filters: CSATReportFilters) {
         case "month": { const m = new Date(now); m.setDate(m.getDate() - 30); startDate = m.toISOString(); break; }
       }
     }
-    if (filters.dateTo) { const d = new Date(filters.dateTo); d.setDate(d.getDate() + 1); endDate = d.toISOString(); }
+    if (filters.dateTo) { const d = new Date(filters.dateTo + "T00:00:00"); d.setDate(d.getDate() + 1); endDate = d.toISOString(); }
 
     // Resolve teams → attendant IDs
     let teamAttendantIds: string[] | null = null;
