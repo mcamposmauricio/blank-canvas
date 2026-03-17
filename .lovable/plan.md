@@ -1,39 +1,21 @@
 
+# Plano: Default Queue/Team Always Active + Priority Assignment — CONCLUÍDO ✅
 
-# Fix: Bug 2 — `createLinkedRoom` usa owner_user_id errado no segundo chat
+## O que foi feito
 
-## Causa raiz
+### Migração: Triggers + Auto-provisioning
+- ✅ Removidos 6 triggers duplicados em `chat_rooms` (auto_assign_chat_room, trg_chat_timeline_update, trg_decrement_attendant_on_close, decrement_active_on_room_delete, trg_resync_attendant_counter, update_company_contact_metrics_on_close)
+- ✅ Criada function `ensure_tenant_chat_defaults(p_tenant_id, p_user_id)` que auto-provisiona: default team, default category, category-team link, e assignment config habilitado
+- ✅ Trigger `trg_provision_tenant_chat_defaults` em `user_profiles` AFTER INSERT para provisionar defaults em novos tenants
+- ✅ Function `sync_csm_chat_enabled()` atualizada para chamar `ensure_tenant_chat_defaults` e auto-vincular atendente ao time default
+- ✅ UNIQUE constraint em `chat_assignment_configs(category_team_id)` para suportar ON CONFLICT
 
-Na primeira conversa, `handleStartChat` resolve `ownerUserId`, `finalContactId` e `finalCompanyContactId` via edge function `resolve-chat-visitor` (linhas 907-909), mas armazena esses valores apenas em **variáveis locais**. Quando o usuário inicia um segundo chat, `handleNewChat` chama `createLinkedRoom` que lê `paramOwnerUserId`, `paramContactId` e `paramCompanyContactId` dos **URL params** — que são `null` para visitantes não-resolvidos. Isso resulta em `owner_user_id = "00000000..."`, e o trigger `assign_chat_room` não encontra o tenant, impedindo a atribuição.
+### Frontend
+- ✅ Removido bloco de setTimeout + auto-assign manual em AttendantsTab.tsx (o trigger faz tudo automaticamente)
 
-## Correção
-
-**Arquivo:** `src/pages/ChatWidget.tsx`
-
-1. **Adicionar 3 refs** para persistir os IDs resolvidos entre chats:
-   - `resolvedOwnerRef = useRef<string | null>(null)`
-   - `resolvedContactIdRef = useRef<string | null>(null)`
-   - `resolvedCompanyContactIdRef = useRef<string | null>(null)`
-
-2. **Em `handleStartChat`** (após linha 909): salvar os valores resolvidos nos refs:
-   ```typescript
-   if (data.user_id) { ownerUserId = data.user_id; resolvedOwnerRef.current = data.user_id; }
-   if (data.contact_id) { finalContactId = data.contact_id; resolvedContactIdRef.current = data.contact_id; }
-   if (data.company_contact_id) { finalCompanyContactId = data.company_contact_id; resolvedCompanyContactIdRef.current = data.company_contact_id; }
-   ```
-
-3. **Em `createLinkedRoom`** (linhas 708-714): usar os refs como fallback:
-   ```typescript
-   const insertData: any = {
-     visitor_id: vId,
-     owner_user_id: paramOwnerUserId || resolvedOwnerRef.current || "00000000-...",
-     status: "waiting",
-   };
-   const ccId = paramCompanyContactId || resolvedCompanyContactIdRef.current;
-   const cId = paramContactId || resolvedContactIdRef.current;
-   if (ccId) insertData.company_contact_id = ccId;
-   if (cId) insertData.contact_id = cId;
-   ```
-
-Nenhuma migração SQL necessária. Apenas alterações em `src/pages/ChatWidget.tsx`.
-
+## Resultado
+- Default team + category + assignment config são criados automaticamente para cada tenant
+- Novos atendentes são vinculados ao time default automaticamente pelo trigger
+- Regras manuais de categoria têm prioridade na atribuição (service_category_id definido pelo resolve-chat-visitor)
+- Sem regra manual → fallback para categoria/time default
+- 6 triggers redundantes eliminados em chat_rooms

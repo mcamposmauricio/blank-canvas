@@ -52,6 +52,10 @@ const ChatWidget = () => {
 
   const isResolvedVisitor = !!paramVisitorToken && !!paramOwnerUserId;
 
+  const resolvedOwnerRef = useRef<string | null>(null);
+  const resolvedContactIdRef = useRef<string | null>(null);
+  const resolvedCompanyContactIdRef = useRef<string | null>(null);
+
   const [isOpen, setIsOpen] = useState(!isEmbed);
   const [phase, setPhase] = useState<WidgetPhase>("form");
   const [visitorToken, setVisitorToken] = useState<string | null>(null);
@@ -707,11 +711,13 @@ const ChatWidget = () => {
   const createLinkedRoom = async (vId: string) => {
     const insertData: any = {
       visitor_id: vId,
-      owner_user_id: paramOwnerUserId || "00000000-0000-0000-0000-000000000000",
+      owner_user_id: paramOwnerUserId || resolvedOwnerRef.current || "00000000-0000-0000-0000-000000000000",
       status: "waiting",
     };
-    if (paramCompanyContactId) insertData.company_contact_id = paramCompanyContactId;
-    if (paramContactId) insertData.contact_id = paramContactId;
+    const ccId = paramCompanyContactId || resolvedCompanyContactIdRef.current;
+    const cId = paramContactId || resolvedContactIdRef.current;
+    if (ccId) insertData.company_contact_id = ccId;
+    if (cId) insertData.contact_id = cId;
 
     const { data: newRoom } = await supabase
       .from("chat_rooms")
@@ -904,9 +910,9 @@ const ChatWidget = () => {
 
         if (res.ok) {
           const data = await res.json();
-          if (data.user_id) ownerUserId = data.user_id;
-          if (data.contact_id) finalContactId = data.contact_id;
-          if (data.company_contact_id) finalCompanyContactId = data.company_contact_id;
+          if (data.user_id) { ownerUserId = data.user_id; resolvedOwnerRef.current = data.user_id; }
+          if (data.contact_id) { finalContactId = data.contact_id; resolvedContactIdRef.current = data.contact_id; }
+          if (data.company_contact_id) { finalCompanyContactId = data.company_contact_id; resolvedCompanyContactIdRef.current = data.company_contact_id; }
           if (data.visitor_token) {
             resolvedVisitorToken = data.visitor_token;
             localStorage.setItem("chat_visitor_token", data.visitor_token);
