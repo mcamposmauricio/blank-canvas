@@ -1,21 +1,32 @@
 
-# Plano: Default Queue/Team Always Active + Priority Assignment — CONCLUÍDO ✅
 
-## O que foi feito
+# Plano: Seed de 5 Empresas + 5 Contatos de Teste
 
-### Migração: Triggers + Auto-provisioning
-- ✅ Removidos 6 triggers duplicados em `chat_rooms` (auto_assign_chat_room, trg_chat_timeline_update, trg_decrement_attendant_on_close, decrement_active_on_room_delete, trg_resync_attendant_counter, update_company_contact_metrics_on_close)
-- ✅ Criada function `ensure_tenant_chat_defaults(p_tenant_id, p_user_id)` que auto-provisiona: default team, default category, category-team link, e assignment config habilitado
-- ✅ Trigger `trg_provision_tenant_chat_defaults` em `user_profiles` AFTER INSERT para provisionar defaults em novos tenants
-- ✅ Function `sync_csm_chat_enabled()` atualizada para chamar `ensure_tenant_chat_defaults` e auto-vincular atendente ao time default
-- ✅ UNIQUE constraint em `chat_assignment_configs(category_team_id)` para suportar ON CONFLICT
+## O que será feito
 
-### Frontend
-- ✅ Removido bloco de setTimeout + auto-assign manual em AttendantsTab.tsx (o trigger faz tudo automaticamente)
+Criar uma edge function temporária `seed-test-data` que insere no tenant `50740c0a-af12-4c44-abb7-95999dc6e172` (seu tenant):
 
-## Resultado
-- Default team + category + assignment config são criados automaticamente para cada tenant
-- Novos atendentes são vinculados ao time default automaticamente pelo trigger
-- Regras manuais de categoria têm prioridade na atribuição (service_category_id definido pelo resolve-chat-visitor)
-- Sem regra manual → fallback para categoria/time default
-- 6 triggers redundantes eliminados em chat_rooms
+### 5 Empresas (tabela `contacts`, `is_company = true`)
+| Nome | Email | CNPJ | Setor | Cidade/UF |
+|---|---|---|---|---|
+| Tech Solutions Ltda | contato@techsolutions.com.br | 12345678000190 | Tecnologia | São Paulo/SP |
+| Agro Forte SA | contato@agroforte.com.br | 98765432000110 | Agronegócio | Ribeirão Preto/SP |
+| Educação Digital ME | admin@edudigital.com.br | 11223344000155 | Educação | Curitiba/PR |
+| Saúde Mais Ltda | contato@saudemais.com.br | 55667788000199 | Saúde | Belo Horizonte/MG |
+| Logística Express SA | ops@logexpress.com.br | 99887766000133 | Logística | Rio de Janeiro/RJ |
+
+### 5 Contatos (tabela `company_contacts`, 1 por empresa)
+| Nome | Email | Cargo | Depto | Empresa |
+|---|---|---|---|---|
+| Carlos Silva | carlos@techsolutions.com.br | CTO | Tecnologia | Tech Solutions |
+| Maria Oliveira | maria@agroforte.com.br | Gerente Comercial | Vendas | Agro Forte |
+| João Santos | joao@edudigital.com.br | Diretor Acadêmico | Educação | Educação Digital |
+| Ana Costa | ana@saudemais.com.br | Coordenadora | Operações | Saúde Mais |
+| Pedro Lima | pedro@logexpress.com.br | Gerente de Logística | Operações | Logística Express |
+
+## Implementacao
+
+1. Criar edge function `seed-test-data` que usa service role key para inserir os dados (bypass RLS)
+2. Deploy e executar a function uma vez
+3. Deletar a edge function após execução (dados já persistidos)
+
