@@ -711,11 +711,13 @@ const ChatWidget = () => {
   const createLinkedRoom = async (vId: string) => {
     const insertData: any = {
       visitor_id: vId,
-      owner_user_id: paramOwnerUserId || "00000000-0000-0000-0000-000000000000",
+      owner_user_id: paramOwnerUserId || resolvedOwnerRef.current || "00000000-0000-0000-0000-000000000000",
       status: "waiting",
     };
-    if (paramCompanyContactId) insertData.company_contact_id = paramCompanyContactId;
-    if (paramContactId) insertData.contact_id = paramContactId;
+    const ccId = paramCompanyContactId || resolvedCompanyContactIdRef.current;
+    const cId = paramContactId || resolvedContactIdRef.current;
+    if (ccId) insertData.company_contact_id = ccId;
+    if (cId) insertData.contact_id = cId;
 
     const { data: newRoom } = await supabase
       .from("chat_rooms")
