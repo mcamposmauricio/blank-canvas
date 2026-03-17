@@ -908,9 +908,9 @@ const ChatWidget = () => {
 
         if (res.ok) {
           const data = await res.json();
-          if (data.user_id) ownerUserId = data.user_id;
-          if (data.contact_id) finalContactId = data.contact_id;
-          if (data.company_contact_id) finalCompanyContactId = data.company_contact_id;
+          if (data.user_id) { ownerUserId = data.user_id; resolvedOwnerRef.current = data.user_id; }
+          if (data.contact_id) { finalContactId = data.contact_id; resolvedContactIdRef.current = data.contact_id; }
+          if (data.company_contact_id) { finalCompanyContactId = data.company_contact_id; resolvedCompanyContactIdRef.current = data.company_contact_id; }
           if (data.visitor_token) {
             resolvedVisitorToken = data.visitor_token;
             localStorage.setItem("chat_visitor_token", data.visitor_token);
