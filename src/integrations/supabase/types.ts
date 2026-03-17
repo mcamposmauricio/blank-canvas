@@ -117,7 +117,7 @@ export type Database = {
           {
             foreignKeyName: "attendant_profiles_csm_id_fkey"
             columns: ["csm_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "csms"
             referencedColumns: ["id"]
           },
