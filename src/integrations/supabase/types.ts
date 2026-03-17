@@ -455,7 +455,7 @@ export type Database = {
           {
             foreignKeyName: "chat_assignment_configs_category_team_id_fkey"
             columns: ["category_team_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "chat_category_teams"
             referencedColumns: ["id"]
           },
@@ -3203,6 +3203,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_tenant_chat_defaults: {
+        Args: { p_tenant_id: string; p_user_id: string }
+        Returns: undefined
+      }
       get_user_tenant_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
