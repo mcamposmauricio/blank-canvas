@@ -1,30 +1,20 @@
 
-# Plan: Tenant Isolation Review — COMPLETED ✅
+# Plano: Fix Atendentes Duplicados + Limpeza de Triggers — CONCLUÍDO ✅
 
-## What was done
+## O que foi feito
 
-### Phase 1: Backfill
-- ✅ Populated `tenant_id` on all 6 `user_roles` records (were NULL)
-- ✅ No duplicate attendant_profiles found (already clean)
+### Migração 1 (parcial — triggers)
+- ✅ Removidos 18 triggers duplicados em 10 tabelas (csms, campaign_contacts, chat_banner_field_rules, chat_banners, chat_broadcasts, chat_business_hour_breaks, chat_rooms, chat_service_categories, chat_teams, responses)
 
-### Phase 2: RLS Migration (20 tables)
-- ✅ Rewrote all policies from `user_id = auth.uid()` to `tenant_id = get_user_tenant_id(auth.uid())`
-- ✅ Tables: contacts, company_contacts, csms, campaigns, campaign_contacts, campaign_sends, responses, chat_settings, chat_business_hours, chat_auto_rules, chat_macros, chat_tags, chat_custom_fields, chat_rooms, chat_messages, chat_visitors, attendant_profiles, brand_settings, api_keys, user_roles
-- ✅ Kept anon policies for widget (chat_rooms, chat_messages, chat_visitors, chat_settings) and NPS (campaigns, campaign_contacts, contacts, brand_settings)
-- ✅ Kept master policies intact
-- ✅ chat_macros: private macros only visible to owner, public macros visible to all tenant members
+### Migração 2 (dados + constraint + trigger)
+- ✅ Limpeza de attendant_profiles duplicados (mantido o mais recente por csm_id)
+- ✅ Limpeza de chat_team_members órfãos
+- ✅ Adicionada UNIQUE constraint em `attendant_profiles(csm_id)`
+- ✅ Function `sync_csm_chat_enabled()` reescrita para tratar INSERT + UPDATE
+- ✅ Trigger expandido para `AFTER INSERT OR UPDATE OF is_chat_enabled`
 
-### Phase 2.5: Trigger fix
-- ✅ Fixed `campaign_contacts` and `campaign_sends` triggers — they used `set_tenant_id_from_user` but have no `user_id` column
-- ✅ Created `set_tenant_id_from_campaign()` function to derive tenant_id from the campaign
-
-### Phase 3: Frontend
-- ✅ No frontend changes needed — RLS handles all scoping automatically
-- ✅ INSERT operations continue using `user_id = auth.uid()` for audit, triggers fill `tenant_id`
-
-## Result
-- Admin of tenant A sees ALL data from tenant A (not just their own)
-- Admin of tenant A cannot see data from tenant B
-- Widget (anon) continues working
-- NPS public access continues working
-- Master sees everything
+## Resultado
+- Atendentes não aparecem mais duplicados na sidebar
+- Novos CSMs criados com `is_chat_enabled = true` geram attendant_profile automaticamente (sem precisar desligar/ligar toggle)
+- Constraint UNIQUE previne futuras duplicatas
+- 18 triggers redundantes eliminados (performance melhorada)
