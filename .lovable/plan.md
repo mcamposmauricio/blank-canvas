@@ -1,30 +1,53 @@
 
-# Plan: Tenant Isolation Review — COMPLETED ✅
 
-## What was done
+# Plano: Fix Atendentes Duplicados + Limpeza de Triggers Duplicados
 
-### Phase 1: Backfill
-- ✅ Populated `tenant_id` on all 6 `user_roles` records (were NULL)
-- ✅ No duplicate attendant_profiles found (already clean)
+## Problema 1: Atendentes duplicados na sidebar
+Dois triggers idênticos em `csms` (`sync_csm_chat_enabled_trigger` e `trg_sync_csm_chat_enabled`) executam a mesma function `sync_csm_chat_enabled` no UPDATE. Cada toggle cria 2 attendant_profiles. Sem unique constraint em `attendant_profiles(csm_id)`.
 
-### Phase 2: RLS Migration (20 tables)
-- ✅ Rewrote all policies from `user_id = auth.uid()` to `tenant_id = get_user_tenant_id(auth.uid())`
-- ✅ Tables: contacts, company_contacts, csms, campaigns, campaign_contacts, campaign_sends, responses, chat_settings, chat_business_hours, chat_auto_rules, chat_macros, chat_tags, chat_custom_fields, chat_rooms, chat_messages, chat_visitors, attendant_profiles, brand_settings, api_keys, user_roles
-- ✅ Kept anon policies for widget (chat_rooms, chat_messages, chat_visitors, chat_settings) and NPS (campaigns, campaign_contacts, contacts, brand_settings)
-- ✅ Kept master policies intact
-- ✅ chat_macros: private macros only visible to owner, public macros visible to all tenant members
+## Problema 2: Toggle precisa ser desligado/ligado
+O trigger só dispara em UPDATE, não em INSERT. CSM criado com `is_chat_enabled = true` não gera attendant_profile.
 
-### Phase 2.5: Trigger fix
-- ✅ Fixed `campaign_contacts` and `campaign_sends` triggers — they used `set_tenant_id_from_user` but have no `user_id` column
-- ✅ Created `set_tenant_id_from_campaign()` function to derive tenant_id from the campaign
+## Problema 3: Triggers duplicados em massa
+Auditoria completa revelou **19 pares de triggers duplicados** (mesma function, mesmo evento, mesma tabela):
 
-### Phase 3: Frontend
-- ✅ No frontend changes needed — RLS handles all scoping automatically
-- ✅ INSERT operations continue using `user_id = auth.uid()` for audit, triggers fill `tenant_id`
+| Tabela | Function duplicada | Triggers a REMOVER |
+|---|---|---|
+| `csms` | `sync_csm_chat_enabled` (UPDATE) | `trg_sync_csm_chat_enabled` |
+| `campaign_contacts` | `create_nps_trail_on_campaign_contact` (INSERT) | `on_campaign_contact_create_nps_trail` |
+| `campaign_contacts` | `update_nps_trail_on_email_sent` (UPDATE) | `on_campaign_contact_email_sent` |
+| `chat_banner_field_rules` | `set_tenant_id_from_banner` (INSERT) | `set_tenant_id_from_banner_trigger` |
+| `chat_banners` | `set_tenant_id_from_user` (INSERT) | `set_chat_banners_tenant_id` |
+| `chat_broadcasts` | `set_tenant_id_from_user` (INSERT) | `set_broadcast_tenant_id` |
+| `chat_broadcasts` | `update_updated_at_column` (UPDATE) | `update_broadcasts_updated_at` |
+| `chat_business_hour_breaks` | `set_tenant_id_from_business_hour` (INSERT) | `set_break_tenant_id` |
+| `chat_rooms` | `assign_chat_room` (INSERT) | `trg_assign_chat_room` (BEFORE) -- conflita com `auto_assign_chat_room` (AFTER); manter apenas o AFTER |
+| `chat_rooms` | `create_chat_timeline_event` (UPDATE) | `trg_chat_timeline_update` |
+| `chat_rooms` | `decrement_attendant_active_conversations` (UPDATE) | `trg_decrement_attendant_on_close` |
+| `chat_rooms` | `decrement_on_room_delete` (DELETE) | `decrement_on_room_delete` (o duplicado) |
+| `chat_rooms` | `update_company_contact_chat_metrics` (UPDATE) | `update_company_contact_metrics_on_close` |
+| `chat_service_categories` | `set_tenant_id_from_user` (INSERT) | `set_tenant_id_chat_service_categories` |
+| `chat_teams` | `set_tenant_id_from_user` (INSERT) | `set_tenant_id_chat_teams` |
+| `responses` | `create_recovery_trail_for_detractor` (INSERT) | `recovery_trail_for_detractor` |
+| `responses` | `update_campaign_send_response` (INSERT) | `update_campaign_send_on_response` |
+| `responses` | `update_contact_nps_on_response` (INSERT) | `update_contact_nps` |
 
-## Result
-- Admin of tenant A sees ALL data from tenant A (not just their own)
-- Admin of tenant A cannot see data from tenant B
-- Widget (anon) continues working
-- NPS public access continues working
-- Master sees everything
+---
+
+## Correções (1 migração SQL)
+
+### 1. Remover 18 triggers duplicados
+DROP de todos os triggers listados na coluna "Triggers a REMOVER" acima.
+
+### 2. Limpar attendant_profiles duplicados
+Deletar registros duplicados por `csm_id`, mantendo o mais recente. Limpar `chat_team_members` órfãos.
+
+### 3. Adicionar UNIQUE constraint em `attendant_profiles(csm_id)`
+Garante que `ON CONFLICT` funcione e previne futuras duplicatas.
+
+### 4. Expandir trigger de `csms` para INSERT
+Alterar `sync_csm_chat_enabled_trigger` para disparar em `AFTER INSERT OR UPDATE OF is_chat_enabled`. Ajustar a function para tratar INSERT (criar profile se `is_chat_enabled = true`).
+
+### 5. Frontend
+Nenhuma alteração necessária. A sidebar e AttendantsTab refletem dados corretos automaticamente.
+
