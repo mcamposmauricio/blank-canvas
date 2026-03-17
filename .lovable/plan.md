@@ -1,65 +1,89 @@
 
 
-# Plano de Teste End-to-End
+# Plano: Revisão de Isolamento de Tenant (Não-Master) + Backfill
 
-## Realidade
+## Problema
 
-Este é um conjunto de **50+ cenários** que abrange 7 módulos. Testes end-to-end via browser automation são limitados a interações de UI — não conseguem verificar triggers de banco, RLS policies, ou lógica de edge functions diretamente. 
+Políticas RLS usam `user_id = auth.uid()` em vez de `tenant_id = get_user_tenant_id(auth.uid())` em ~11 tabelas. Admins de um tenant não conseguem ver dados criados por outros membros do mesmo tenant.
 
-## Abordagem Proposta
+## Dados encontrados que precisam de backfill
 
-Dividir em **3 camadas de teste**:
+| Dado | Problema |
+|---|---|
+| `user_roles` — 6 registros | Todos com `tenant_id = NULL` |
+| `attendant_profiles` — user `94a21524` | 2 perfis duplicados para o mesmo user |
+| Nenhum tenant tem `chat_settings` | 0 registros — ao corrigir RLS de `user_id` para `tenant_id`, nenhum tenant terá configurações acessíveis até criar |
+| Nenhum tenant tem `brand_settings` | 0 registros |
+| Nenhum tenant tem `chat_business_hours` | 0 registros |
+| Nenhum tenant tem `chat_service_categories` | 0 registros |
 
-### Camada 1: Testes de Edge Functions (automatizáveis agora)
-Usar `supabase--test_edge_functions` para validar lógica de backend:
-- `assign-chat-room`: business hours, breaks, overrides, capacity check
-- `backoffice-admin`: accept-invite, confirm users
-- `resolve-chat-visitor`: criação de visitor/contact
-- `process-chat-auto-rules`: welcome message, inactivity rules
+Todas as outras tabelas com dados (contacts, campaigns, etc.) já têm `tenant_id` preenchido corretamente.
 
-### Camada 2: Queries de Validação no Banco
-Usar `supabase--read_query` para verificar estado do banco:
-- Triggers preenchendo `tenant_id` corretamente
-- RLS isolando dados por tenant
-- `active_conversations` incrementando/decrementando
-- Health score calculado após resposta NPS
-- Trail NPS criada automaticamente
+---
 
-### Camada 3: Testes de UI via Browser (seletivos)
-Testar fluxos críticos de UI:
-- Login → navegação ao Home
-- Abrir chat widget → preencher form → sala criada
-- Criar campanha NPS
-- Criar artigo no Help Center
-- Impersonation no Backoffice
+## Fase 1: Backfill de dados
 
-## Priorização
+### 1.1 — Preencher `tenant_id` em `user_roles`
+```sql
+UPDATE user_roles ur
+SET tenant_id = (SELECT tenant_id FROM user_profiles WHERE user_id = ur.user_id LIMIT 1)
+WHERE tenant_id IS NULL;
+```
 
-Dado o volume, sugiro executar em **fases**:
+### 1.2 — Remover `attendant_profile` duplicado
+O user `94a21524` tem 2 perfis no mesmo tenant. Manter o mais recente, remover o outro.
 
-**Fase 1 — Multi-Tenancy & Auth (crítico)**
-- Verificar isolamento de tenant via queries no banco
-- Testar invite flow (já corrigido recentemente)
-- Verificar que master vê dados filtrados por tenant selecionado
+### 1.3 — Garantir `chat_settings` por tenant
+Ao corrigir a RLS para tenant-based, o sistema precisa criar `chat_settings` automaticamente por tenant (não mais por user). O frontend já faz upsert — ajustar para usar `tenant_id` no filtro. Nenhum backfill necessário pois não há registros existentes.
 
-**Fase 2 — Chat Module**
-- Testar assign-chat-room edge function
-- Verificar business hours / breaks / overrides
-- Validar round-robin e capacity via queries
+---
 
-**Fase 3 — NPS Module**
-- Verificar criação de campanha e envio
-- Testar resposta via link_token
-- Validar trail automática e health score
+## Fase 2: Corrigir RLS (migração SQL)
 
-**Fase 4 — Contatos, Help Center, Banners**
-- Verificar CRUD básico com isolamento de tenant
-- Testar publicação de artigos
-- Validar regras de segmentação de banners
+Trocar `user_id = auth.uid()` por `tenant_id = get_user_tenant_id(auth.uid())` nas seguintes tabelas:
 
-## Execução
+| Tabela | Policies a corrigir |
+|---|---|
+| `contacts` | SELECT/UPDATE/DELETE — de `user_id` para `tenant_id` |
+| `company_contacts` | Idem + remover `anon = true` genérico |
+| `csms` | SELECT/UPDATE/DELETE |
+| `campaigns` | SELECT/UPDATE/DELETE (manter anon SELECT para NPS público) |
+| `campaign_contacts` | SELECT/UPDATE/DELETE (via campaigns.tenant_id ou direto) |
+| `campaign_sends` | SELECT/UPDATE (via campaigns.tenant_id ou direto) |
+| `responses` | SELECT (via campaigns — trocar subquery para tenant_id) |
+| `chat_settings` | ALL — de `user_id` para `tenant_id` |
+| `chat_business_hours` | ALL — de `user_id` para `tenant_id` |
+| `chat_auto_rules` | ALL — de `user_id` para `tenant_id` |
+| `chat_macros` | ALL — de `user_id` para `tenant_id` (manter `is_private + user_id` para macros privadas) |
+| `chat_tags` | ALL — de `user_id` para `tenant_id` |
+| `chat_custom_fields` | ALL — de `user_id` para `tenant_id` |
+| `chat_rooms` | SELECT — remover `anon = true` genérico, criar tenant-based para authenticated; manter anon INSERT/UPDATE para widget |
+| `chat_visitors` | SELECT — de `owner_user_id` para `tenant_id` para authenticated; manter anon para widget |
+| `chat_messages` | SELECT — de `owner via room` para tenant-based; manter anon para widget |
+| `attendant_profiles` | SELECT "Admins can view all" — adicionar filtro `tenant_id` |
+| `brand_settings` | SELECT/UPDATE/DELETE — de `user_id` para `tenant_id` |
+| `api_keys` | ALL — de `user_id` para `tenant_id` |
+| `user_roles` | Adicionar policy tenant-based para SELECT (admin vê roles do tenant) |
 
-Posso começar imediatamente com as Camadas 1 e 2 (edge function tests + queries de banco) para cobrir a maior parte dos cenários sem depender de interação manual. Para a Camada 3, precisarei que você esteja logado no preview.
+Para cada tabela: manter policy separada para master (`is_master(auth.uid())`).
 
-**Quer que eu comece pela Fase 1 (Multi-Tenancy) ou por outro módulo específico?**
+---
+
+## Fase 3: Ajustes no frontend
+
+Com RLS corrigido, a maioria se resolve automaticamente. Ajustes pontuais:
+
+- `AdminSettings.tsx` — query de `chat_settings` usar `.eq("tenant_id", tenantId)` em vez de `.eq("user_id", userId)` para upsert
+- Componentes que fazem INSERT com `user_id` — continuar enviando `user_id` (auditoria), o trigger `set_tenant_id_from_user` preenche o `tenant_id` automaticamente
+- Verificar que `chat_business_hours`, `chat_auto_rules`, `chat_tags`, `chat_macros` usam tenant no frontend para queries
+
+---
+
+## Fase 4: Validação
+
+- Admin do tenant A vê todos os dados do tenant A (não só os próprios)
+- Admin do tenant A não vê dados do tenant B
+- Widget público continua funcionando (anon INSERT/SELECT em chat_rooms, chat_messages, chat_visitors)
+- NPS público continua funcionando (anon SELECT em campaigns, campaign_contacts)
+- Master vê tudo
 
