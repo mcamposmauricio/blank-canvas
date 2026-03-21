@@ -64,7 +64,12 @@ export function CompanyCard({ company, onClick, onDelete, canDelete = true }: Co
             <Building2 className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-semibold text-lg leading-tight">{company.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-lg leading-tight">{company.name}</h3>
+              {company.is_active === false && (
+                <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">Inativa</Badge>
+              )}
+            </div>
             {company.trade_name && company.trade_name !== company.name && (
               <p className="text-sm text-muted-foreground">{company.trade_name}</p>
             )}

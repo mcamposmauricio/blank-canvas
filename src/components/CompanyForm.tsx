@@ -231,6 +231,19 @@ export function CompanyForm({ initialData, onSubmit, onCancel, submitLabel }: Co
 
       <Separator className="my-4" />
 
+      <div className="flex items-center justify-between">
+        <div>
+          <Label>Empresa ativa</Label>
+          <p className="text-xs text-muted-foreground">Empresas inativas não recebem atribuição automática, banners ou campanhas NPS</p>
+        </div>
+        <Switch
+          checked={formData.is_active}
+          onCheckedChange={(checked) => updateField("is_active", checked)}
+        />
+      </div>
+
+      <Separator className="my-4" />
+
       <CustomFieldsEditor
         value={formData.custom_fields}
         onChange={(fields) => updateField("custom_fields", fields)}

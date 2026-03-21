@@ -324,7 +324,12 @@ export function CompanyDetailsSheet({
           <SheetHeader className="pb-4">
             <SheetTitle className="flex items-start justify-between">
               <div>
-                <p className="text-xl">{company.trade_name || company.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xl">{company.trade_name || company.name}</p>
+                  {(company as any).is_active === false && (
+                    <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">Inativa</Badge>
+                  )}
+                </div>
                 {company.trade_name && company.trade_name !== company.name && (
                   <p className="text-sm text-muted-foreground font-normal">{company.name}</p>
                 )}
