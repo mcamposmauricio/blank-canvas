@@ -109,7 +109,7 @@ export function CompanyForm({ initialData, onSubmit, onCancel, submitLabel }: Co
     }
   };
 
-  const updateField = (field: keyof CompanyFormData, value: string | Record<string, string>) => {
+  const updateField = (field: keyof CompanyFormData, value: string | Record<string, string> | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
