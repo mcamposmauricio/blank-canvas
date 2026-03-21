@@ -62,7 +62,7 @@ const CategoriesTab = () => {
     const [{ data: cats }, { data: tms }, { data: comps }, { data: catTeams }, { data: rules }, { data: defs }] = await Promise.all([
       supabase.from("chat_service_categories").select("id, name, description, color, is_default").order("name"),
       supabase.from("chat_teams").select("id, name").order("name"),
-      supabase.from("contacts").select("id, name, trade_name, service_category_id").eq("is_company", true).order("name"),
+      supabase.from("contacts").select("id, name, trade_name, service_category_id").eq("is_company", true).eq("is_active", true).order("name"),
       supabase.from("chat_category_teams").select("id, category_id, team_id"),
       supabase.from("chat_category_field_rules" as any).select("id, category_id, field_key, field_value, field_source, operator"),
       supabase.from("chat_custom_field_definitions").select("key, label").eq("target", "company").eq("is_active", true),
