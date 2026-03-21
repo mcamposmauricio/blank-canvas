@@ -153,7 +153,7 @@ const Contacts = () => {
   // Fetch companies when page/search/filters change
   useEffect(() => {
     fetchCompanies();
-  }, [page, debouncedSearch, sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter]);
+  }, [page, debouncedSearch, sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter, statusFilter]);
 
   const fetchFilterOptions = async () => {
     const { data: { user } } = await supabase.auth.getUser();
