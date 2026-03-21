@@ -175,9 +175,15 @@ Deno.serve(async (req) => {
     if (contactId && Object.keys(rulesByBanner).length > 0) {
       const { data } = await supabase
         .from("contacts")
-        .select("name, email, company_document, company_sector, city, state, external_id, service_priority, cs_status, mrr, contract_value, health_score, custom_fields")
+        .select("name, email, company_document, company_sector, city, state, external_id, service_priority, cs_status, mrr, contract_value, health_score, custom_fields, is_active")
         .eq("id", contactId)
         .maybeSingle();
+      // Skip banners for inactive companies
+      if (data?.is_active === false) {
+        return new Response(JSON.stringify({ banners: [] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       contactData = data;
     }
 

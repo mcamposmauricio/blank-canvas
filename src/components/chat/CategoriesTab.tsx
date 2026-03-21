@@ -251,7 +251,9 @@ const CategoriesTab = () => {
       ) : (
         <div className="grid gap-4">
           {categories.map((cat) => {
-            const catCompanies = companies.filter(c => c.service_category_id === cat.id);
+            const catCompanies = cat.is_default
+              ? companies.filter(c => c.service_category_id === cat.id || !c.service_category_id)
+              : companies.filter(c => c.service_category_id === cat.id);
             const catTeamLinks = categoryTeams.filter(ct => ct.category_id === cat.id);
             const catTeamIds = catTeamLinks.map(ct => ct.team_id);
             const assignedTeams = teams.filter(t => catTeamIds.includes(t.id));

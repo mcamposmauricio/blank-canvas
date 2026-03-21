@@ -74,8 +74,9 @@ Deno.serve(async (req) => {
       // Get contacts that haven't responded yet, including company_contact_id
       const { data: campaignContacts, error: contactsError } = await supabase
         .from('campaign_contacts')
-        .select('contact_id, company_contact_id, contacts(*)')
-        .eq('campaign_id', campaign.id);
+        .select('contact_id, company_contact_id, contacts!inner(*, is_active)')
+        .eq('campaign_id', campaign.id)
+        .eq('contacts.is_active', true);
 
       if (contactsError) {
         console.error(`Error fetching contacts for campaign ${campaign.id}:`, contactsError);

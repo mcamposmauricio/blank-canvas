@@ -218,8 +218,9 @@ export function CategoryFieldRules({ categoryId, rules, fieldDefs, onChanged }: 
 
       const { data: companies } = await supabase
         .from("contacts")
-        .select("id, custom_fields, service_category_id, name, email, company_document, company_sector, city, state, external_id, service_priority, cs_status, mrr, contract_value, health_score")
-        .eq("is_company", true);
+        .select("id, custom_fields, service_category_id, name, email, company_document, company_sector, city, state, external_id, service_priority, cs_status, mrr, contract_value, health_score, is_active")
+        .eq("is_company", true)
+        .eq("is_active", true);
 
       if (!companies) { setSyncing(false); return; }
       const rulesList = ((allRules as unknown) as FieldRule[]) || [];
