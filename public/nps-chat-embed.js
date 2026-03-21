@@ -7,7 +7,7 @@
   var buttonShape = script.getAttribute("data-button-shape") || "circle";
   var companyName = script.getAttribute("data-company-name") || "Suporte";
   var baseUrl = script.src.replace(/\/nps-chat-embed\.js.*$/, "");
-  var supabaseUrl = "https://mfmkxpdufcbwydixbbbe.supabase.co";
+  var supabaseUrl = "https://ydnblcgygkbqioowbnhz.supabase.co";
 
   var resolvedToken = null;
   var resolvedName = null;
