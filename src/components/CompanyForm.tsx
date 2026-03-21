@@ -30,6 +30,7 @@ interface CompanyFormData {
   service_priority: string;
   service_category_id: string;
   custom_fields: Record<string, string>;
+  is_active: boolean;
 }
 
 interface CompanyFormProps {
