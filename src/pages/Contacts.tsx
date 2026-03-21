@@ -111,6 +111,7 @@ const Contacts = () => {
   const [priorityFilter, setPriorityFilter] = useState("");
   const [healthFilter, setHealthFilter] = useState("");
   const [npsFilter, setNpsFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
   // Filter options from DB
   const [filterOptions, setFilterOptions] = useState<{
     sectors: string[]; states: string[]; cities: string[];
