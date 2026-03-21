@@ -1958,6 +1958,7 @@ export type Database = {
           external_id: string | null
           health_score: number | null
           id: string
+          is_active: boolean
           is_company: boolean
           last_nps_date: string | null
           last_nps_score: number | null
@@ -1992,6 +1993,7 @@ export type Database = {
           external_id?: string | null
           health_score?: number | null
           id?: string
+          is_active?: boolean
           is_company?: boolean
           last_nps_date?: string | null
           last_nps_score?: number | null
@@ -2026,6 +2028,7 @@ export type Database = {
           external_id?: string | null
           health_score?: number | null
           id?: string
+          is_active?: boolean
           is_company?: boolean
           last_nps_date?: string | null
           last_nps_score?: number | null
