@@ -85,6 +85,7 @@ interface Company {
   last_nps_score: number | null;
   mrr: number | null;
   custom_fields: any;
+  is_active: boolean;
 }
 
 const PAGE_SIZE = 50;
