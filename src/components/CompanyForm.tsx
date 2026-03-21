@@ -63,6 +63,7 @@ export function CompanyForm({ initialData, onSubmit, onCancel, submitLabel }: Co
     service_priority: initialData?.service_priority || "normal",
     service_category_id: initialData?.service_category_id || "",
     custom_fields: (initialData?.custom_fields as Record<string, string>) || {},
+    is_active: initialData?.is_active !== undefined ? initialData.is_active : true,
   });
 
   useEffect(() => {
