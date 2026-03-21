@@ -1,21 +1,32 @@
 
-# Plano: Default Queue/Team Always Active + Priority Assignment — CONCLUÍDO ✅
 
-## O que foi feito
+# Fix: Widget embed usando URL do Supabase errada
 
-### Migração: Triggers + Auto-provisioning
-- ✅ Removidos 6 triggers duplicados em `chat_rooms` (auto_assign_chat_room, trg_chat_timeline_update, trg_decrement_attendant_on_close, decrement_active_on_room_delete, trg_resync_attendant_counter, update_company_contact_metrics_on_close)
-- ✅ Criada function `ensure_tenant_chat_defaults(p_tenant_id, p_user_id)` que auto-provisiona: default team, default category, category-team link, e assignment config habilitado
-- ✅ Trigger `trg_provision_tenant_chat_defaults` em `user_profiles` AFTER INSERT para provisionar defaults em novos tenants
-- ✅ Function `sync_csm_chat_enabled()` atualizada para chamar `ensure_tenant_chat_defaults` e auto-vincular atendente ao time default
-- ✅ UNIQUE constraint em `chat_assignment_configs(category_team_id)` para suportar ON CONFLICT
+## Problema
 
-### Frontend
-- ✅ Removido bloco de setTimeout + auto-assign manual em AttendantsTab.tsx (o trigger faz tudo automaticamente)
+O arquivo `public/nps-chat-embed.js` tem a URL do Supabase **hardcoded errada** na linha 10:
 
-## Resultado
-- Default team + category + assignment config são criados automaticamente para cada tenant
-- Novos atendentes são vinculados ao time default automaticamente pelo trigger
-- Regras manuais de categoria têm prioridade na atribuição (service_category_id definido pelo resolve-chat-visitor)
-- Sem regra manual → fallback para categoria/time default
-- 6 triggers redundantes eliminados em chat_rooms
+```javascript
+var supabaseUrl = "https://mfmkxpdufcbwydixbbbe.supabase.co";  // ERRADO
+```
+
+O projeto correto é `ydnblcgygkbqioowbnhz`. Por isso, todas as chamadas do widget (`get-widget-config`, `resolve-chat-visitor`, `get-visitor-banners`) vão para o projeto errado e retornam `invalid_api_key`.
+
+A API key `chat_cd4e3b7...` existe no banco e está ativa -- o problema é apenas a URL.
+
+## Correção
+
+**Arquivo:** `public/nps-chat-embed.js` -- linha 10
+
+Trocar:
+```javascript
+var supabaseUrl = "https://mfmkxpdufcbwydixbbbe.supabase.co";
+```
+
+Por:
+```javascript
+var supabaseUrl = "https://ydnblcgygkbqioowbnhz.supabase.co";
+```
+
+1 linha alterada, 0 migrações SQL.
+
