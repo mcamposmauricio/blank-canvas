@@ -409,7 +409,7 @@ const Contacts = () => {
   const showingFrom = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const showingTo = Math.min((page + 1) * PAGE_SIZE, totalCount);
 
-  const activeFilterCount = [sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter].filter(Boolean).length;
+  const activeFilterCount = [sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter, statusFilter !== "active" ? statusFilter : ""].filter(Boolean).length;
 
   // Filter cities by selected state
   const filteredCities = stateFilter
