@@ -31,6 +31,7 @@ interface Company {
   mrr?: number | null;
   last_nps_score?: number | null;
   custom_fields?: any;
+  is_active?: boolean;
 }
 
 interface CompanyCardProps {
