@@ -649,7 +649,12 @@ const Contacts = () => {
                       >
                         <TableCell className="font-medium">
                           <div>
-                            <p className="truncate max-w-[200px]">{company.trade_name || company.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="truncate max-w-[200px]">{company.trade_name || company.name}</p>
+                              {company.is_active === false && (
+                                <Badge variant="secondary" className="text-xs shrink-0">Inativa</Badge>
+                              )}
+                            </div>
                             {company.trade_name && (
                               <p className="text-xs text-muted-foreground truncate max-w-[200px]">{company.name}</p>
                             )}
