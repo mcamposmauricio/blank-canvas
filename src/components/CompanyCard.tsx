@@ -55,7 +55,7 @@ export function CompanyCard({ company, onClick, onDelete, canDelete = true }: Co
   
   return (
     <Card 
-      className="p-4 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+      className={`p-4 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer group ${company.is_active === false ? 'opacity-60' : ''}`}
       onClick={onClick}
     >
       <div className="flex items-start justify-between mb-3">
