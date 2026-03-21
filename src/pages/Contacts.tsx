@@ -213,6 +213,10 @@ const Contacts = () => {
         else if (npsFilter === "none") query = query.is("last_nps_score", null);
       }
 
+      // Status filter (active/inactive)
+      if (statusFilter === "active") query = query.eq("is_active", true);
+      else if (statusFilter === "inactive") query = query.eq("is_active", false);
+
       // Pagination
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
