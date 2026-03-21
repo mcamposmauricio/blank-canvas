@@ -143,7 +143,7 @@ const Contacts = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter]);
+  }, [sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter, statusFilter]);
 
   // Fetch filter options once
   useEffect(() => {
