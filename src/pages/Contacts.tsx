@@ -306,6 +306,7 @@ const Contacts = () => {
         service_priority: data.service_priority || 'normal',
         service_category_id: data.service_category_id || null,
         custom_fields: data.custom_fields && Object.keys(data.custom_fields).length > 0 ? data.custom_fields : {},
+        is_active: data.is_active !== undefined ? data.is_active : true,
       } as any);
 
       if (error) throw error;
