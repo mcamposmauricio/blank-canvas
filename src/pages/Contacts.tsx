@@ -85,6 +85,7 @@ interface Company {
   last_nps_score: number | null;
   mrr: number | null;
   custom_fields: any;
+  is_active: boolean;
 }
 
 const PAGE_SIZE = 50;
@@ -110,6 +111,7 @@ const Contacts = () => {
   const [priorityFilter, setPriorityFilter] = useState("");
   const [healthFilter, setHealthFilter] = useState("");
   const [npsFilter, setNpsFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
   // Filter options from DB
   const [filterOptions, setFilterOptions] = useState<{
     sectors: string[]; states: string[]; cities: string[];
@@ -141,7 +143,7 @@ const Contacts = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter]);
+  }, [sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter, statusFilter]);
 
   // Fetch filter options once
   useEffect(() => {
@@ -151,7 +153,7 @@ const Contacts = () => {
   // Fetch companies when page/search/filters change
   useEffect(() => {
     fetchCompanies();
-  }, [page, debouncedSearch, sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter]);
+  }, [page, debouncedSearch, sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter, statusFilter]);
 
   const fetchFilterOptions = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -210,6 +212,10 @@ const Contacts = () => {
         else if (npsFilter === "detractor") query = query.lte("last_nps_score", 6).not("last_nps_score", "is", null);
         else if (npsFilter === "none") query = query.is("last_nps_score", null);
       }
+
+      // Status filter (active/inactive)
+      if (statusFilter === "active") query = query.eq("is_active", true);
+      else if (statusFilter === "inactive") query = query.eq("is_active", false);
 
       // Pagination
       const from = page * PAGE_SIZE;
@@ -300,6 +306,7 @@ const Contacts = () => {
         service_priority: data.service_priority || 'normal',
         service_category_id: data.service_category_id || null,
         custom_fields: data.custom_fields && Object.keys(data.custom_fields).length > 0 ? data.custom_fields : {},
+        is_active: data.is_active !== undefined ? data.is_active : true,
       } as any);
 
       if (error) throw error;
@@ -344,6 +351,7 @@ const Contacts = () => {
           service_priority: data.service_priority || 'normal',
           service_category_id: data.service_category_id || null,
           custom_fields: data.custom_fields && Object.keys(data.custom_fields).length > 0 ? data.custom_fields : {},
+          is_active: data.is_active !== undefined ? data.is_active : true,
         } as any)
         .eq("id", editCompanyData.id);
 
@@ -403,7 +411,7 @@ const Contacts = () => {
   const showingFrom = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const showingTo = Math.min((page + 1) * PAGE_SIZE, totalCount);
 
-  const activeFilterCount = [sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter].filter(Boolean).length;
+  const activeFilterCount = [sectorFilter, stateFilter, cityFilter, csStatusFilter, priorityFilter, healthFilter, npsFilter, statusFilter !== "active" ? statusFilter : ""].filter(Boolean).length;
 
   // Filter cities by selected state
   const filteredCities = stateFilter
@@ -481,7 +489,7 @@ const Contacts = () => {
               </Button>
             </div>
             {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => { setSectorFilter(""); setStateFilter(""); setCityFilter(""); setCsStatusFilter(""); setPriorityFilter(""); setHealthFilter(""); setNpsFilter(""); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setSectorFilter(""); setStateFilter(""); setCityFilter(""); setCsStatusFilter(""); setPriorityFilter(""); setHealthFilter(""); setNpsFilter(""); setStatusFilter("active"); }}>
                 <X className="h-4 w-4 mr-1" />
                 {activeFilterCount} {t("companies.activeFilters")}
               </Button>
@@ -489,6 +497,16 @@ const Contacts = () => {
           </div>
           <div className="flex items-center gap-2 flex-wrap bg-muted/30 rounded-xl px-4 py-3">
             <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
+              <SelectTrigger className="w-[130px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Ativas</SelectItem>
+                <SelectItem value="inactive">Inativas</SelectItem>
+                <SelectItem value="all">Todas</SelectItem>
+              </SelectContent>
+            </Select>
             {filterOptions.sectors.length > 0 && (
               <Select value={sectorFilter} onValueChange={(v) => setSectorFilter(v === "all" ? "" : v)}>
                 <SelectTrigger className="w-[160px] h-8 text-xs">
@@ -631,7 +649,12 @@ const Contacts = () => {
                       >
                         <TableCell className="font-medium">
                           <div>
-                            <p className="truncate max-w-[200px]">{company.trade_name || company.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="truncate max-w-[200px]">{company.trade_name || company.name}</p>
+                              {company.is_active === false && (
+                                <Badge variant="secondary" className="text-xs shrink-0">Inativa</Badge>
+                              )}
+                            </div>
                             {company.trade_name && (
                               <p className="text-xs text-muted-foreground truncate max-w-[200px]">{company.name}</p>
                             )}

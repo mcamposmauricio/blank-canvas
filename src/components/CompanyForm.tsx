@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { CNPJInput, type CNPJData } from "@/components/CNPJInput";
@@ -29,6 +30,7 @@ interface CompanyFormData {
   service_priority: string;
   service_category_id: string;
   custom_fields: Record<string, string>;
+  is_active: boolean;
 }
 
 interface CompanyFormProps {
@@ -61,6 +63,7 @@ export function CompanyForm({ initialData, onSubmit, onCancel, submitLabel }: Co
     service_priority: initialData?.service_priority || "normal",
     service_category_id: initialData?.service_category_id || "",
     custom_fields: (initialData?.custom_fields as Record<string, string>) || {},
+    is_active: initialData?.is_active !== undefined ? initialData.is_active : true,
   });
 
   useEffect(() => {
@@ -106,7 +109,7 @@ export function CompanyForm({ initialData, onSubmit, onCancel, submitLabel }: Co
     }
   };
 
-  const updateField = (field: keyof CompanyFormData, value: string | Record<string, string>) => {
+  const updateField = (field: keyof CompanyFormData, value: string | Record<string, string> | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -224,6 +227,19 @@ export function CompanyForm({ initialData, onSubmit, onCancel, submitLabel }: Co
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <Separator className="my-4" />
+
+      <div className="flex items-center justify-between">
+        <div>
+          <Label>Empresa ativa</Label>
+          <p className="text-xs text-muted-foreground">Empresas inativas não recebem atribuição automática, banners ou campanhas NPS</p>
+        </div>
+        <Switch
+          checked={formData.is_active}
+          onCheckedChange={(checked) => updateField("is_active", checked)}
+        />
       </div>
 
       <Separator className="my-4" />

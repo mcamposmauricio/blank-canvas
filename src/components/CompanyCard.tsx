@@ -31,6 +31,7 @@ interface Company {
   mrr?: number | null;
   last_nps_score?: number | null;
   custom_fields?: any;
+  is_active?: boolean;
 }
 
 interface CompanyCardProps {
@@ -54,7 +55,7 @@ export function CompanyCard({ company, onClick, onDelete, canDelete = true }: Co
   
   return (
     <Card 
-      className="p-4 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+      className={`p-4 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer group ${company.is_active === false ? 'opacity-60' : ''}`}
       onClick={onClick}
     >
       <div className="flex items-start justify-between mb-3">
@@ -63,7 +64,12 @@ export function CompanyCard({ company, onClick, onDelete, canDelete = true }: Co
             <Building2 className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-semibold text-lg leading-tight">{company.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-lg leading-tight">{company.name}</h3>
+              {company.is_active === false && (
+                <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">Inativa</Badge>
+              )}
+            </div>
             {company.trade_name && company.trade_name !== company.name && (
               <p className="text-sm text-muted-foreground">{company.trade_name}</p>
             )}

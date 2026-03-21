@@ -711,11 +711,14 @@ async function applyCategoryFieldRules(
   // Get tenant from contact
   const { data: contact } = await supabase
     .from("contacts")
-    .select("tenant_id, custom_fields")
+    .select("tenant_id, custom_fields, is_active")
     .eq("id", contactId)
     .single();
 
   if (!contact?.tenant_id) return;
+
+  // Skip categorization for inactive companies
+  if (contact.is_active === false) return;
 
   const { data: rules } = await supabase
     .from("chat_category_field_rules")
