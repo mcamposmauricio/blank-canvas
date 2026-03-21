@@ -487,7 +487,7 @@ const Contacts = () => {
               </Button>
             </div>
             {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => { setSectorFilter(""); setStateFilter(""); setCityFilter(""); setCsStatusFilter(""); setPriorityFilter(""); setHealthFilter(""); setNpsFilter(""); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setSectorFilter(""); setStateFilter(""); setCityFilter(""); setCsStatusFilter(""); setPriorityFilter(""); setHealthFilter(""); setNpsFilter(""); setStatusFilter("active"); }}>
                 <X className="h-4 w-4 mr-1" />
                 {activeFilterCount} {t("companies.activeFilters")}
               </Button>
@@ -495,6 +495,16 @@ const Contacts = () => {
           </div>
           <div className="flex items-center gap-2 flex-wrap bg-muted/30 rounded-xl px-4 py-3">
             <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
+              <SelectTrigger className="w-[130px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Ativas</SelectItem>
+                <SelectItem value="inactive">Inativas</SelectItem>
+                <SelectItem value="all">Todas</SelectItem>
+              </SelectContent>
+            </Select>
             {filterOptions.sectors.length > 0 && (
               <Select value={sectorFilter} onValueChange={(v) => setSectorFilter(v === "all" ? "" : v)}>
                 <SelectTrigger className="w-[160px] h-8 text-xs">
