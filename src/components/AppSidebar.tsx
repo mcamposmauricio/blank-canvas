@@ -220,11 +220,13 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
                   <CollapsibleContent onClick={(e) => e.stopPropagation()}>
                     <SidebarGroupContent>
                       <SidebarMenu>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton onClick={() => navigate("/admin/dashboard")} isActive={isActive("/admin/dashboard")} tooltip={t("chat.dashboard.title")} className={cn("pl-6", isActive("/admin/dashboard") ? activeItemCls : "hover:bg-sidebar-accent")}>
-                            <LayoutDashboard className="h-4 w-4" /><span>Dashboard</span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
+                        {hasPermission("chat.dashboard", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/admin/dashboard")} isActive={isActive("/admin/dashboard")} tooltip={t("chat.dashboard.title")} className={cn("pl-6", isActive("/admin/dashboard") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <LayoutDashboard className="h-4 w-4" /><span>Dashboard</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
 
                         {/* Workspace */}
                         {hasPermission("chat.workspace", "view") && (
