@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "next-themes";
 import { lazy, Suspense, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import Auth from "./pages/Auth";
 import LandingPage from "./pages/LandingPage";
 import JourneyPage from "./pages/JourneyPage";
@@ -25,6 +26,12 @@ import SidebarLayout from "./components/SidebarLayout";
 
 // Lazy loaded pages — CS Module
 const Home = lazy(() => import("./pages/Home"));
+const CSDashboard = lazy(() => import("./pages/CSDashboard"));
+const CSTrailsPage = lazy(() => import("./pages/CSTrailsPage"));
+const CSMsPage = lazy(() => import("./pages/CSMsPage"));
+const CSHealthPage = lazy(() => import("./pages/CSHealthPage"));
+const CSChurnPage = lazy(() => import("./pages/CSChurnPage"));
+const CSFinancialPage = lazy(() => import("./pages/CSFinancialPage"));
 
 // Lazy loaded pages — NPS Module
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -40,10 +47,10 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminAttendants = lazy(() => import("./pages/AdminAttendants"));
 const AdminCSATReport = lazy(() => import("./pages/AdminCSATReport"));
 const AdminSettings = lazy(() => import("./pages/AdminSettings"));
-
 const AdminChatHistory = lazy(() => import("./pages/AdminChatHistory"));
 const AdminBanners = lazy(() => import("./pages/AdminBanners"));
 const AdminBroadcasts = lazy(() => import("./pages/AdminBroadcasts"));
+const AdminDashboardGerencial = lazy(() => import("./pages/AdminDashboardGerencial"));
 
 // Lazy loaded pages — Other
 const MyProfile = lazy(() => import("./pages/MyProfile"));
@@ -91,6 +98,13 @@ const ChatRouteRedirect = () => {
   if (target) return <Navigate to={target} replace />;
   return <SuspenseFallback />;
 };
+
+// Helper to wrap lazy pages with Suspense + PermissionGuard
+const Guarded = ({ module, action = "view" as const, requireMaster = false, children }: { module: string; action?: "view" | "edit" | "delete" | "manage"; requireMaster?: boolean; children: React.ReactNode }) => (
+  <PermissionGuard module={module} action={action} requireMaster={requireMaster}>
+    <Suspense fallback={<SuspenseFallback />}>{children}</Suspense>
+  </PermissionGuard>
+);
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" enableSystem={false}>
@@ -144,45 +158,52 @@ const App = () => (
             <Route path="/home" element={<Suspense fallback={<SuspenseFallback />}><Home /></Suspense>} />
 
             {/* Chat Module */}
-            <Route path="/admin/dashboard" element={<Suspense fallback={<SuspenseFallback />}><AdminDashboard /></Suspense>} />
+            <Route path="/admin/dashboard" element={<Guarded module="chat.dashboard"><AdminDashboard /></Guarded>} />
+            <Route path="/admin/dashboard-gerencial" element={<Guarded module="chat.dashboard"><AdminDashboardGerencial /></Guarded>} />
             <Route path="/admin/chat/:roomId" element={<ChatRouteRedirect />} />
-            <Route path="/admin/workspace" element={<AdminWorkspace />} />
-            <Route path="/admin/workspace/:roomId" element={<AdminWorkspace />} />
-            <Route path="/admin/attendants" element={<Suspense fallback={<SuspenseFallback />}><AdminAttendants /></Suspense>} />
-            <Route path="/admin/settings" element={<Suspense fallback={<SuspenseFallback />}><AdminSettings /></Suspense>} />
-            <Route path="/admin/settings/:tab" element={<Suspense fallback={<SuspenseFallback />}><AdminSettings /></Suspense>} />
-            
-            <Route path="/admin/history" element={<Suspense fallback={<SuspenseFallback />}><AdminChatHistory /></Suspense>} />
-            <Route path="/admin/banners" element={<Suspense fallback={<SuspenseFallback />}><AdminBanners /></Suspense>} />
-            <Route path="/admin/csat" element={<Suspense fallback={<SuspenseFallback />}><AdminCSATReport /></Suspense>} />
-            <Route path="/admin/broadcasts" element={<Suspense fallback={<SuspenseFallback />}><AdminBroadcasts /></Suspense>} />
+            <Route path="/admin/workspace" element={<Guarded module="chat.workspace"><AdminWorkspace /></Guarded>} />
+            <Route path="/admin/workspace/:roomId" element={<Guarded module="chat.workspace"><AdminWorkspace /></Guarded>} />
+            <Route path="/admin/attendants" element={<Guarded module="chat.settings.attendants"><AdminAttendants /></Guarded>} />
+            <Route path="/admin/settings" element={<Guarded module="chat" action="view"><Suspense fallback={<SuspenseFallback />}><AdminSettings /></Suspense></Guarded>} />
+            <Route path="/admin/settings/:tab" element={<Guarded module="chat" action="view"><Suspense fallback={<SuspenseFallback />}><AdminSettings /></Suspense></Guarded>} />
+            <Route path="/admin/history" element={<Guarded module="chat.history"><AdminChatHistory /></Guarded>} />
+            <Route path="/admin/banners" element={<Guarded module="chat.banners"><AdminBanners /></Guarded>} />
+            <Route path="/admin/csat" element={<Guarded module="chat.reports"><AdminCSATReport /></Guarded>} />
+            <Route path="/admin/broadcasts" element={<Guarded module="chat.broadcasts"><AdminBroadcasts /></Guarded>} />
 
             {/* NPS Module */}
-            <Route path="/nps/dashboard" element={<Suspense fallback={<SuspenseFallback />}><Dashboard /></Suspense>} />
-            <Route path="/nps/contacts" element={<Suspense fallback={<SuspenseFallback />}><Contacts /></Suspense>} />
-            <Route path="/nps/contacts/:id" element={<Suspense fallback={<SuspenseFallback />}><Contacts /></Suspense>} />
-            <Route path="/nps/people" element={<Suspense fallback={<SuspenseFallback />}><People /></Suspense>} />
-            <Route path="/nps/people/:id" element={<Suspense fallback={<SuspenseFallback />}><People /></Suspense>} />
-            <Route path="/nps/campaigns" element={<Suspense fallback={<SuspenseFallback />}><Campaigns /></Suspense>} />
-            <Route path="/nps/campaigns/:id" element={<Suspense fallback={<SuspenseFallback />}><CampaignDetails /></Suspense>} />
-            <Route path="/nps/settings" element={<Suspense fallback={<SuspenseFallback />}><Settings /></Suspense>} />
-            <Route path="/nps/nps-settings" element={<Suspense fallback={<SuspenseFallback />}><NPSSettings /></Suspense>} />
+            <Route path="/nps/dashboard" element={<Guarded module="nps.dashboard"><Dashboard /></Guarded>} />
+            <Route path="/nps/contacts" element={<Guarded module="contacts.companies"><Contacts /></Guarded>} />
+            <Route path="/nps/contacts/:id" element={<Guarded module="contacts.companies"><Contacts /></Guarded>} />
+            <Route path="/nps/people" element={<Guarded module="contacts.people"><People /></Guarded>} />
+            <Route path="/nps/people/:id" element={<Guarded module="contacts.people"><People /></Guarded>} />
+            <Route path="/nps/campaigns" element={<Guarded module="nps.campaigns"><Campaigns /></Guarded>} />
+            <Route path="/nps/campaigns/:id" element={<Guarded module="nps.campaigns"><CampaignDetails /></Guarded>} />
+            <Route path="/nps/settings" element={<Guarded module="settings"><Settings /></Guarded>} />
+            <Route path="/nps/nps-settings" element={<Guarded module="nps.settings"><NPSSettings /></Guarded>} />
 
+            {/* CS Module */}
+            <Route path="/cs/dashboard" element={<Guarded module="cs.dashboard"><CSDashboard /></Guarded>} />
+            <Route path="/cs/trails" element={<Guarded module="cs.trails"><CSTrailsPage /></Guarded>} />
+            <Route path="/cs/csms" element={<Guarded module="cs.csms"><CSMsPage /></Guarded>} />
+            <Route path="/cs/health" element={<Guarded module="cs.health"><CSHealthPage /></Guarded>} />
+            <Route path="/cs/churn" element={<Guarded module="cs.churn"><CSChurnPage /></Guarded>} />
+            <Route path="/cs/financial" element={<Guarded module="cs.financial"><CSFinancialPage /></Guarded>} />
 
             {/* Help Center Module */}
-            <Route path="/help/overview" element={<Suspense fallback={<SuspenseFallback />}><HelpOverview /></Suspense>} />
-            <Route path="/help/articles" element={<Suspense fallback={<SuspenseFallback />}><HelpArticles /></Suspense>} />
-            <Route path="/help/articles/new" element={<Suspense fallback={<SuspenseFallback />}><HelpArticleEditor /></Suspense>} />
-            <Route path="/help/articles/:id/edit" element={<Suspense fallback={<SuspenseFallback />}><HelpArticleEditor /></Suspense>} />
-            <Route path="/help/collections" element={<Suspense fallback={<SuspenseFallback />}><HelpCollections /></Suspense>} />
-            <Route path="/help/settings" element={<Suspense fallback={<SuspenseFallback />}><HelpSettings /></Suspense>} />
-            <Route path="/help/import" element={<Suspense fallback={<SuspenseFallback />}><HelpImport /></Suspense>} />
+            <Route path="/help/overview" element={<Guarded module="help.overview"><HelpOverview /></Guarded>} />
+            <Route path="/help/articles" element={<Guarded module="help.articles"><HelpArticles /></Guarded>} />
+            <Route path="/help/articles/new" element={<Guarded module="help.articles" action="edit"><HelpArticleEditor /></Guarded>} />
+            <Route path="/help/articles/:id/edit" element={<Guarded module="help.articles" action="edit"><HelpArticleEditor /></Guarded>} />
+            <Route path="/help/collections" element={<Guarded module="help.collections"><HelpCollections /></Guarded>} />
+            <Route path="/help/settings" element={<Guarded module="help.settings"><HelpSettings /></Guarded>} />
+            <Route path="/help/import" element={<Guarded module="help.import" action="manage"><HelpImport /></Guarded>} />
 
             {/* Profile */}
             <Route path="/profile" element={<Suspense fallback={<SuspenseFallback />}><MyProfile /></Suspense>} />
 
             {/* Backoffice Master */}
-            <Route path="/backoffice" element={<Suspense fallback={<SuspenseFallback />}><Backoffice /></Suspense>} />
+            <Route path="/backoffice" element={<Guarded module="__master__" requireMaster><Backoffice /></Guarded>} />
           </Route>
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

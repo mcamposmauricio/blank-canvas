@@ -220,11 +220,13 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
                   <CollapsibleContent onClick={(e) => e.stopPropagation()}>
                     <SidebarGroupContent>
                       <SidebarMenu>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton onClick={() => navigate("/admin/dashboard")} isActive={isActive("/admin/dashboard")} tooltip={t("chat.dashboard.title")} className={cn("pl-6", isActive("/admin/dashboard") ? activeItemCls : "hover:bg-sidebar-accent")}>
-                            <LayoutDashboard className="h-4 w-4" /><span>Dashboard</span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
+                        {hasPermission("chat.dashboard", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/admin/dashboard")} isActive={isActive("/admin/dashboard")} tooltip={t("chat.dashboard.title")} className={cn("pl-6", isActive("/admin/dashboard") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <LayoutDashboard className="h-4 w-4" /><span>Dashboard</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
 
                         {/* Workspace */}
                         {hasPermission("chat.workspace", "view") && (
@@ -438,6 +440,68 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
                           <SidebarMenuItem>
                             <SidebarMenuButton onClick={() => navigate("/help/import")} isActive={isActive("/help/import")} tooltip={t("help.import")} className={cn(isActive("/help/import") ? activeItemCls : "hover:bg-sidebar-accent")}>
                               <Import className="h-4 w-4" /><span>{t("help.import")}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarGroup>
+            )}
+
+            {/* CS Module */}
+            {(hasPermission("cs", "view") || hasPermission("cs.dashboard", "view") || hasPermission("cs.trails", "view") || hasPermission("cs.health", "view")) && (
+              <SidebarGroup>
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <SidebarGroupLabel className={`${groupLabelCls} cursor-pointer hover:text-foreground/70 flex items-center justify-between w-full transition-colors`}>
+                      <span className="flex items-center gap-2"><TrendingUp className="h-3.5 w-3.5" /><span>Customer Success</span></span>
+                      {!collapsed && <ChevronDown className="h-3 w-3" />}
+                    </SidebarGroupLabel>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {hasPermission("cs.dashboard", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/cs/dashboard")} isActive={isActive("/cs/dashboard")} tooltip={t("nav.csDashboard")} className={cn(isActive("/cs/dashboard") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <LayoutDashboard className="h-4 w-4" /><span>{t("nav.csDashboard")}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {hasPermission("cs.trails", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/cs/trails")} isActive={isActive("/cs/trails")} tooltip={t("nav.trails")} className={cn(isActive("/cs/trails") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <Flag className="h-4 w-4" /><span>{t("nav.trails")}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {hasPermission("cs.csms", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/cs/csms")} isActive={isActive("/cs/csms")} tooltip={t("nav.csms")} className={cn(isActive("/cs/csms") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <Users className="h-4 w-4" /><span>{t("nav.csms")}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {hasPermission("cs.health", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/cs/health")} isActive={isActive("/cs/health")} tooltip={t("nav.health")} className={cn(isActive("/cs/health") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <TrendingUp className="h-4 w-4" /><span>{t("nav.health")}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {hasPermission("cs.churn", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/cs/churn")} isActive={isActive("/cs/churn")} tooltip={t("nav.churn")} className={cn(isActive("/cs/churn") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <TrendingUp className="h-4 w-4" /><span>{t("nav.churn")}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {hasPermission("cs.financial", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/cs/financial")} isActive={isActive("/cs/financial")} tooltip={t("nav.financial")} className={cn(isActive("/cs/financial") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <BarChart3 className="h-4 w-4" /><span>{t("nav.financial")}</span>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         )}
