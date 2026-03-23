@@ -772,6 +772,9 @@
 
     window.addEventListener("message", function (event) {
       if (event.data && event.data.type === "chat-toggle") {
+        // Remove skeleton overlay as soon as iframe reports ready
+        removeSkeletonOverlay();
+
         widgetIsOpen = event.data.isOpen;
         if (event.data.isOpen) {
           iframe.style.width = "420px";
