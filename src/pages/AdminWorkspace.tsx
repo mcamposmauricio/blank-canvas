@@ -621,12 +621,11 @@ const AdminWorkspace = () => {
                 <ChatRoomList rooms={filteredRooms} selectedRoomId={selectedRoomId} onSelectRoom={handleSelectRoom} loading={roomsLoading} />
               </div>
             </div>
-          </ResizablePanel>
+          </div>
 
-          <ResizableHandle withHandle />
-
-          {/* Center: Chat area */}
-          <ResizablePanel defaultSize={infoPanelOpen ? 50 : 80} minSize={isCompact ? 30 : 35}>
+          {/* Center + Right: Chat area + Side panel — resizable between them */}
+          <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
+          <ResizablePanel defaultSize={infoPanelOpen ? 65 : 100} minSize={40}>
             <div className={`h-full min-w-0 ${isCompact ? 'p-1 pt-2 pb-2' : 'p-1.5 pt-3 pb-3'}`}>
               {effectiveRoom ? (
                 <Card className="h-full flex flex-col rounded-lg border bg-card shadow-sm overflow-hidden">
