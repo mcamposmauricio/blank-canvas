@@ -33,6 +33,7 @@ interface WorkspaceSettings {
   ws_hidden_custom_fields: string[];
   ws_timeline_max_events: number;
   ws_default_panel_open: boolean;
+  ws_show_queue_info: boolean;
 }
 
 const DEFAULTS: WorkspaceSettings = {
