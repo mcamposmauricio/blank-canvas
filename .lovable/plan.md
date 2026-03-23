@@ -1,26 +1,53 @@
 
 
-# Plano: Corrigir link de conversa redirecionando para workspace vazio
+# Plano: Workspace Full-Width + Layout Responsivo Fixo
 
-## Causa raiz
+## Problemas
 
-Quando o usuario acessa `/admin/chat/:roomId`, o `ChatRouteRedirect` redireciona para `/admin/workspace/:roomId`. O workspace seta `selectedRoomId = paramRoomId`.
+1. **Telas menores (tablet/compact):** O side panel inicia colapsado (`isCompact` seta `infoPanelOpen = false`). Deveria iniciar aberto como em telas grandes.
+2. **Telas grandes:** O workspace nao ocupa 100% da largura — sobra espaco a direita do side panel. Causado pelo padding do `SidebarLayout` (`p-3 sm:p-4 md:p-6 lg:p-8`) e pelo `max-w-full` insuficiente.
+3. **Redimensionamento:** So a area de mensagens deveria ser redimensionavel via drag. Room list e side panel devem ter tamanho fixo.
 
-Porem, o `useEffect` nas linhas 234-243 do `AdminWorkspace.tsx` limpa o `selectedRoomId` se o room nao estiver em `filteredRooms`. O `filteredRooms` filtra apenas rooms do atendente atual (linha 221-225). Se o room pertence a outro atendente (ou esta sem atendente), ele e removido da selecao — e o usuario ve o workspace vazio.
+## Solucao
 
-## Correcao
+### A. Remover padding do SidebarLayout para o workspace
 
-### AdminWorkspace.tsx — Preservar `paramRoomId`
+O workspace ja usa `-m-4 md:-m-6 lg:-m-8` para compensar o padding, mas isso nao e perfeito. Solucao: detectar quando a rota e `/admin/workspace` e remover o padding do container.
 
-1. No `useEffect` de limpeza (linha 234-243): se `paramRoomId` estiver definido e for igual ao `selectedRoomId`, **nao limpar** — o usuario navegou intencionalmente para essa conversa
+**Arquivo:** `src/components/SidebarLayout.tsx`
+- Adicionar `useLocation()` e verificar se a rota comeca com `/admin/workspace`
+- Se sim, usar `p-0` em vez de `p-3 sm:p-4 md:p-6 lg:p-8`
 
-2. No `filteredRooms` (linha 217-225): se `paramRoomId` estiver definido, incluir sempre o room com esse ID no filtro (alem dos filtros normais), para que ele apareca na lista lateral
+### B. Side panel sempre aberto (remover auto-collapse)
 
-3. Se o room do `paramRoomId` nao estiver na lista `rooms` (pertence a outro atendente e o `useChatRooms` nao o retorna por filtro de status), fazer um fetch direto desse room especifico no mount e adicionar ao estado
+**Arquivo:** `src/pages/AdminWorkspace.tsx`
+- Remover o `useEffect` que seta `infoPanelOpen(false)` quando `isCompact` (linhas 86-88)
+- Manter o botao de toggle manual para o usuario colapsar se quiser
 
-## Arquivo
+### C. Layout com tamanhos fixos + area de mensagens flexivel
+
+Trocar a logica do `ResizablePanelGroup` para:
+- **Room list:** tamanho fixo (largura fixa via CSS, ~280px desktop, ~240px compact)
+- **Side panel:** tamanho fixo (~320px desktop, ~280px compact)
+- **Area de mensagens:** ocupa todo o espaco restante (`flex-1`), com `ResizableHandle` apenas entre mensagens e side panel para permitir ajuste
+
+Abordagem: usar `flex` layout em vez de `ResizablePanelGroup` para room list (fixo) e um `ResizablePanelGroup` apenas para chat+side panel. Ou manter o ResizablePanelGroup mas com `defaultSize` em pixels via CSS custom.
+
+**Abordagem simplificada:** Manter `ResizablePanelGroup` mas:
+- Room list: `defaultSize={18}`, sem handle de resize (fixo)
+- Chat area: `flex-1` (pega o restante)
+- Side panel: `defaultSize={25}`, com handle de resize entre chat e side panel
+
+Remover o `ResizableHandle` entre room list e chat. Manter apenas o handle entre chat e side panel.
+
+### D. Remover margin negativo hack
+
+Com padding zero no SidebarLayout para workspace, remover o `-m-4 md:-m-6 lg:-m-8` do workspace container.
+
+## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/pages/AdminWorkspace.tsx` | Preservar paramRoomId no filtro e na limpeza, fetch direto se necessario |
+| `src/components/SidebarLayout.tsx` | Padding zero para rota workspace |
+| `src/pages/AdminWorkspace.tsx` | Remover auto-collapse, remover margin hack, room list fixo, handle apenas entre chat e side panel |
 
