@@ -239,15 +239,41 @@ const AdminWorkspace = () => {
   } | null>(null);
 
   // Clear selectedRoomId if no longer in filteredRooms (and not a pending room)
+  // Never clear if it matches paramRoomId (user navigated intentionally via link)
   useEffect(() => {
     if (!selectedRoomId) return;
     if (pendingSelectedRoom) return;
+    if (paramRoomId && selectedRoomId === paramRoomId) return;
     const found = filteredRooms.some((r) => r.id === selectedRoomId);
     if (!found && !roomsLoading) {
       setSelectedRoomId(null);
       setReplyTarget(null);
     }
-  }, [filteredRooms, selectedRoomId, roomsLoading, pendingSelectedRoom]);
+  }, [filteredRooms, selectedRoomId, roomsLoading, pendingSelectedRoom, paramRoomId]);
+
+  // If paramRoomId is set but room is not in rooms list, fetch it directly
+  useEffect(() => {
+    if (!paramRoomId || !user) return;
+    const inRooms = rooms.some((r) => r.id === paramRoomId);
+    if (inRooms || roomsLoading) return;
+    // Room not in active rooms — fetch directly and set as pendingSelectedRoom
+    (async () => {
+      const { data } = await supabase
+        .from("chat_rooms")
+        .select("id, visitor_id, status, resolution_status, attendant_id, contact_id, company_contact_id, started_at, chat_visitors!visitor_id(name)")
+        .eq("id", paramRoomId)
+        .maybeSingle();
+      if (data) {
+        const visitor = (data as any).chat_visitors as { name?: string } | null;
+        setPendingSelectedRoom({
+          id: data.id, visitor_name: visitor?.name ?? "Visitante", visitor_id: data.visitor_id,
+          status: data.status ?? "closed", resolution_status: data.resolution_status ?? "pending",
+          attendant_id: data.attendant_id, contact_id: data.contact_id, company_contact_id: data.company_contact_id,
+          started_at: data.started_at,
+        });
+      }
+    })();
+  }, [paramRoomId, rooms, roomsLoading, user]);
 
   const effectiveRoom = selectedRoom ?? pendingSelectedRoom;
   const isPendingRoom = effectiveRoom?.status === "closed" && (effectiveRoom as any)?.resolution_status === "pending";
