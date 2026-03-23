@@ -283,7 +283,7 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
       )
       .subscribe();
 
-    const resyncInterval = setInterval(resyncCounts, 30_000);
+    const resyncInterval = setInterval(resyncCounts, 300_000);
 
     return () => {
       supabase.removeChannel(roomsChannel);

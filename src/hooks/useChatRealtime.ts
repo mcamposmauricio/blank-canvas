@@ -220,21 +220,14 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
       let unreadCounts: Record<string, number> = {};
 
       if (roomIds.length > 0) {
-        // Fetch last message per room (single query)
-        const { data: msgs } = await supabase
-          .from("chat_messages")
-          .select("room_id, content, created_at, sender_type")
-          .in("room_id", roomIds)
-          .eq("is_internal", false)
-          .order("created_at", { ascending: false });
+        // Fetch last message per room via RPC (1 row per room instead of all messages)
+        const { data: msgs } = await supabase.rpc("get_last_messages_for_rooms", {
+          p_room_ids: roomIds,
+        });
 
         if (msgs) {
-          const seen = new Set<string>();
-          for (const m of msgs as { room_id: string; content: string; created_at: string; sender_type: string }[]) {
-            if (!seen.has(m.room_id)) {
-              seen.add(m.room_id);
-              lastMessages[m.room_id] = { content: m.content, created_at: m.created_at, sender_type: m.sender_type };
-            }
+          for (const m of msgs as { room_id: string; content: string; sender_type: string }[]) {
+            lastMessages[m.room_id] = { content: m.content, created_at: "", sender_type: m.sender_type };
           }
         }
 
