@@ -151,6 +151,11 @@ const ChatWidget = () => {
   useEffect(() => {
     if (!isEmbed) return;
     const handler = (event: MessageEvent) => {
+      // Handle open command from parent (lazy FAB re-open)
+      if (event.data && event.data.type === "nps-chat-open") {
+        setIsOpen(true);
+        return;
+      }
       if (event.data && event.data.type === "nps-chat-update" && event.data.props) {
         const props = event.data.props;
         const { name, email, phone, ...custom } = props;
