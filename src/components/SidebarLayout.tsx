@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useNavigate, Outlet } from "react-router-dom";
+import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -11,6 +11,8 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export default function SidebarLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isWorkspaceRoute = location.pathname.startsWith("/admin/workspace");
   const { user, loading, userDataLoading, tenantId, isAdmin, isImpersonating, impersonatedTenantName, clearImpersonation, availableTenants, selectTenant, needsTenantSelection } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const stored = localStorage.getItem("sidebar-open");
@@ -209,7 +211,7 @@ export default function SidebarLayout() {
               </div>
             )}
 
-            <div className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-auto bg-background">
+            <div className={`flex-1 overflow-auto bg-background ${isWorkspaceRoute ? 'p-0' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
               <Outlet />
             </div>
           </main>
