@@ -229,6 +229,8 @@ const AdminWorkspace = () => {
   })();
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
+  const lastEffectiveRoomRef = useRef<any>(null);
+  const cleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingSelectedRoom, setPendingSelectedRoom] = useState<{
     id: string; visitor_name: string; visitor_id: string; status: string;
     resolution_status: string; attendant_id: string | null; contact_id: string | null;
