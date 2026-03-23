@@ -282,7 +282,9 @@ const AdminWorkspace = () => {
     })();
   }, [paramRoomId, rooms, roomsLoading, user]);
 
-  const effectiveRoom = selectedRoom ?? pendingSelectedRoom;
+  const rawEffectiveRoom = selectedRoom ?? pendingSelectedRoom;
+  if (rawEffectiveRoom) lastEffectiveRoomRef.current = rawEffectiveRoom;
+  const effectiveRoom = rawEffectiveRoom ?? lastEffectiveRoomRef.current;
   const isPendingRoom = effectiveRoom?.status === "closed" && (effectiveRoom as any)?.resolution_status === "pending";
 
   const handleSelectPendingRoom = async (roomId: string) => {
