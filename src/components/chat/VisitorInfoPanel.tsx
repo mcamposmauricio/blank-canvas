@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Mail, Phone, Building2, Hash, Star, Calendar, DollarSign, Activity, ExternalLink, RefreshCw, ChevronDown, Clock, FileText, MapPin, Briefcase, Link2 } from "lucide-react";
+import { User, Mail, Phone, Building2, Hash, Star, Calendar, DollarSign, Activity, ExternalLink, RefreshCw, ChevronDown, Clock, FileText, MapPin, Briefcase, Link2, Layers, Users, Bot, XCircle, MessageSquare } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isComplexValue, formatComplexValue, SimpleList, UrlList, ObjectList, JsonDisplay } from "@/components/CustomFieldsDisplay";
@@ -55,6 +55,33 @@ interface Company {
   company_document: string | null;
   custom_fields: Record<string, any> | null;
   external_id: string | null;
+  service_category_id: string | null;
+}
+
+interface CategoryInfo {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
+interface TeamInfo {
+  id: string;
+  name: string;
+}
+
+interface AssignmentInfo {
+  model: string;
+  capacity_limit: number;
+  online_only: boolean;
+  enabled: boolean;
+}
+
+interface AutoRuleInfo {
+  id: string;
+  rule_type: string;
+  trigger_minutes: number | null;
+  message_content: string | null;
+  close_resolution_status: string;
 }
 
 interface TimelineEvent {
@@ -110,6 +137,7 @@ export interface WorkspaceDisplaySettings {
   ws_timeline_max_events: number;
   ws_show_recent_chats: boolean;
   ws_recent_chats_count: number;
+  ws_show_queue_info?: boolean;
 }
 
 const DEFAULT_SETTINGS: WorkspaceDisplaySettings = {
@@ -134,6 +162,7 @@ const DEFAULT_SETTINGS: WorkspaceDisplaySettings = {
   ws_timeline_max_events: 10,
   ws_show_recent_chats: true,
   ws_recent_chats_count: 5,
+  ws_show_queue_info: true,
 };
 
 interface VisitorInfoPanelProps {
@@ -194,6 +223,10 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
   const [chatPage, setChatPage] = useState(0);
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [readOnlyRoom, setReadOnlyRoom] = useState<{ id: string; name: string } | null>(null);
+  const [categoryInfo, setCategoryInfo] = useState<CategoryInfo | null>(null);
+  const [categoryTeams, setCategoryTeams] = useState<TeamInfo[]>([]);
+  const [assignmentInfo, setAssignmentInfo] = useState<AssignmentInfo | null>(null);
+  const [autoRules, setAutoRules] = useState<AutoRuleInfo[]>([]);
   const CHAT_PAGE_SIZE = s.ws_recent_chats_count;
 
   const fetchRecentChats = async (contactId: string | null | undefined, companyContactId: string | null | undefined, page: number) => {
@@ -285,7 +318,7 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
         (async () => {
           const { data } = await supabase
             .from("contacts")
-            .select("id, name, trade_name, health_score, mrr, contract_value, renewal_date, last_nps_score, last_nps_date, city, state, company_sector, company_document, custom_fields, external_id")
+            .select("id, name, trade_name, health_score, mrr, contract_value, renewal_date, last_nps_score, last_nps_date, city, state, company_sector, company_document, custom_fields, external_id, service_category_id")
             .eq("id", resolvedContactId)
             .maybeSingle();
           setCompany(data as Company | null);
@@ -318,6 +351,70 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
     }
 
     await Promise.all(promises);
+
+    // Fetch queue/category info and auto rules in parallel
+    const fetchQueueInfo = async (companyData: Company | null) => {
+      const catId = companyData?.service_category_id;
+      
+      // Fetch category + auto rules in parallel
+      const [catRes, rulesRes] = await Promise.all([
+        catId
+          ? supabase.from("chat_service_categories").select("id, name, color").eq("id", catId).maybeSingle()
+          : supabase.from("chat_service_categories").select("id, name, color").eq("is_default", true).maybeSingle(),
+        supabase.from("chat_auto_rules").select("id, rule_type, trigger_minutes, message_content, close_resolution_status").eq("is_enabled", true).order("sort_order", { ascending: true }),
+      ]);
+
+      const cat = catRes.data as CategoryInfo | null;
+      setCategoryInfo(cat);
+      setAutoRules((rulesRes.data as AutoRuleInfo[]) ?? []);
+
+      if (cat) {
+        // Fetch teams for this category
+        const { data: ctData } = await supabase
+          .from("chat_category_teams")
+          .select("id, team_id")
+          .eq("category_id", cat.id);
+
+        const ctList = ctData ?? [];
+        if (ctList.length > 0) {
+          const teamIds = ctList.map((ct: any) => ct.team_id);
+          const ctIds = ctList.map((ct: any) => ct.id);
+
+          const [teamsRes, configRes] = await Promise.all([
+            supabase.from("chat_teams").select("id, name").in("id", teamIds),
+            supabase.from("chat_assignment_configs").select("model, capacity_limit, online_only, enabled").in("category_team_id", ctIds).limit(1).maybeSingle(),
+          ]);
+
+          setCategoryTeams((teamsRes.data as TeamInfo[]) ?? []);
+          setAssignmentInfo(configRes.data as AssignmentInfo | null);
+        } else {
+          setCategoryTeams([]);
+          setAssignmentInfo(null);
+        }
+      } else {
+        setCategoryTeams([]);
+        setAssignmentInfo(null);
+      }
+    };
+
+    // We need the company data that was just fetched
+    // Re-read from state won't work (async), so re-query if needed
+    if (resolvedContactId) {
+      const { data: companyForQueue } = await supabase
+        .from("contacts")
+        .select("service_category_id")
+        .eq("id", resolvedContactId)
+        .maybeSingle();
+      await fetchQueueInfo({ service_category_id: companyForQueue?.service_category_id } as Company);
+    } else {
+      // No company — just fetch auto rules
+      const { data: rulesData } = await supabase.from("chat_auto_rules").select("id, rule_type, trigger_minutes, message_content, close_resolution_status").eq("is_enabled", true).order("sort_order", { ascending: true });
+      setAutoRules((rulesData as AutoRuleInfo[]) ?? []);
+      setCategoryInfo(null);
+      setCategoryTeams([]);
+      setAssignmentInfo(null);
+    }
+
     await fetchRecentChats(resolvedContactId, resolvedCcId, 0);
 
     setLoading(false);
@@ -474,6 +571,69 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <MapPin className="h-3 w-3 shrink-0" />
                     <span>{[company!.city, company!.state].filter(Boolean).join(", ")}</span>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* FILA DE ATENDIMENTO */}
+          {(s.ws_show_queue_info !== false) && (categoryInfo || autoRules.length > 0) && (
+            <section className="border-t border-border pt-3">
+              <SectionLabel className="flex items-center gap-1">
+                <Layers className="h-3 w-3" /> Fila de Atendimento
+              </SectionLabel>
+              <div className="space-y-2">
+                {categoryInfo && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground">Categoria:</span>
+                      <Badge variant="outline" className="text-[10px] font-medium gap-1">
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: categoryInfo.color ?? 'hsl(var(--primary))' }} />
+                        {categoryInfo.name}
+                      </Badge>
+                    </div>
+                    {categoryTeams.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <Users className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground truncate">
+                          {categoryTeams.map(t => t.name).join(", ")}
+                        </span>
+                      </div>
+                    )}
+                    {assignmentInfo && assignmentInfo.enabled && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
+                          {assignmentInfo.model === "round_robin" ? "Round Robin" : assignmentInfo.model === "load_balance" ? "Load Balance" : assignmentInfo.model}
+                        </Badge>
+                        {assignmentInfo.online_only && (
+                          <Badge variant="secondary" className="text-[9px] px-1.5 py-0">Online only</Badge>
+                        )}
+                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
+                          Cap. {assignmentInfo.capacity_limit}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {autoRules.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Regras Automáticas</p>
+                    {autoRules.map(rule => (
+                      <div key={rule.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {rule.rule_type === "auto_close" ? (
+                          <XCircle className="h-3 w-3 shrink-0" />
+                        ) : (
+                          <MessageSquare className="h-3 w-3 shrink-0" />
+                        )}
+                        <span>
+                          {rule.rule_type === "auto_close"
+                            ? `Fechar sala após ${rule.trigger_minutes} min inativo`
+                            : `Auto-mensagem após ${rule.trigger_minutes} min inativo`}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

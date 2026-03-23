@@ -33,6 +33,7 @@ interface WorkspaceSettings {
   ws_hidden_custom_fields: string[];
   ws_timeline_max_events: number;
   ws_default_panel_open: boolean;
+  ws_show_queue_info: boolean;
 }
 
 const DEFAULTS: WorkspaceSettings = {
@@ -59,6 +60,7 @@ const DEFAULTS: WorkspaceSettings = {
   ws_hidden_custom_fields: [],
   ws_timeline_max_events: 10,
   ws_default_panel_open: true,
+  ws_show_queue_info: true,
 };
 
 interface CustomFieldDef {
@@ -141,6 +143,7 @@ const WorkspaceDisplayTab = () => {
           ws_hidden_custom_fields: d.ws_hidden_custom_fields ?? DEFAULTS.ws_hidden_custom_fields,
           ws_timeline_max_events: d.ws_timeline_max_events ?? DEFAULTS.ws_timeline_max_events,
           ws_default_panel_open: d.ws_default_panel_open ?? DEFAULTS.ws_default_panel_open,
+          ws_show_queue_info: d.ws_show_queue_info ?? DEFAULTS.ws_show_queue_info,
         };
         setWs(loaded);
         setSavedWs(loaded);
@@ -268,7 +271,12 @@ const WorkspaceDisplayTab = () => {
         )}
       </SectionCard>
 
-      {/* Timeline */}
+      {/* Fila de Atendimento */}
+      <SectionCard title="Fila de Atendimento" description="Controle a exibição de categoria, times e regras automáticas no painel.">
+        <ToggleRow id="ws-queue-info" label="Exibir Fila de Atendimento" checked={ws.ws_show_queue_info ?? true} onChange={(v) => update({ ws_show_queue_info: v })} />
+      </SectionCard>
+
+
       <SectionCard title="Timeline" description="Controle a exibição de eventos na timeline.">
         <ToggleRow id="ws-timeline" label="Exibir Timeline" checked={ws.ws_show_timeline} onChange={(v) => update({ ws_show_timeline: v })} />
         {ws.ws_show_timeline && (
