@@ -1,43 +1,89 @@
 
 
-# Plano: Corrigir papéis de usuários do tenant marqponto
+# Plano: Otimizar Carregamento do Widget de Chat
 
-## Situação atual
+## Problema Atual
 
-Todos os 6 usuários do tenant `eee96b59-d7da-45cf-93f1-e3ab0796e678` têm role `admin`, o que ignora todas as permissões granulares.
+Quando o embed `nps-chat-embed.js` carrega em uma pagina do cliente, **antes mesmo do usuario clicar no FAB**, as seguintes requests sao disparadas:
 
-## Correção
+### No script embed (nps-chat-embed.js)
+| # | Request | Quando |
+|---|---|---|
+| 1 | `get-widget-config` (edge function) | Imediato no page load |
+| 2 | `resolve-chat-visitor` (edge function) | Imediato no page load |
+| 3 | `get-visitor-banners` (edge function) | Imediato no page load |
 
-Remover role `admin` de 4 usuários. Manter apenas Mauricio e Thainá como admin.
+### No iframe ChatWidget.tsx (carregado automaticamente)
+| # | Request | Quando |
+|---|---|---|
+| 4 | `chat_settings` SELECT | Iframe mount |
+| 5 | `chat_visitors` SELECT | Iframe mount |
+| 6 | `chat_rooms` SELECT (active room check) | Iframe mount |
+| 7 | `chat_rooms` SELECT (history) | Se phase = history |
+| 8 | `attendant_profiles` SELECT | Se tem rooms no history |
+| 9 | `chat_messages` SELECT (last msgs) | Para cada room no history |
+| 10 | Realtime channel subscription | Iframe mount |
 
-| Usuário | Ação |
+**Total: 7-10 requests no carregamento da pagina, antes de qualquer clique.**
+
+## Solucao Proposta
+
+### Fase 1: Lazy iframe — so carregar o iframe ao clicar no FAB
+
+Hoje o embed cria o iframe imediatamente. O iframe carrega `/widget` que e uma pagina React completa — JS bundle, queries, realtime.
+
+**Mudanca:** O `nps-chat-embed.js` deve:
+1. No page load: executar apenas `get-widget-config` (necessario para cores/nome do FAB) e `get-visitor-banners` (banners sao independentes do chat)
+2. O `resolve-chat-visitor` pode ser adiado — so precisa rodar se o usuario abrir o chat
+3. **Nao criar o iframe** ate o primeiro clique no FAB
+4. Renderizar o FAB (botao flutuante) diretamente no DOM via JS puro (ja renderiza parcialmente, mas o iframe e criado junto)
+5. Ao clicar no FAB pela primeira vez: criar iframe, resolver visitor, carregar chat
+
+**Economia no page load:** De ~7-10 requests para **1-2 requests** (apenas `get-widget-config` + `get-visitor-banners`). O `resolve-chat-visitor` e todas as queries do iframe so acontecem quando o usuario interage.
+
+### Fase 2: Lazy history no ChatWidget.tsx
+
+O ChatWidget.tsx ja tem logica de lazy history (so busca quando `phase === "history"` e widget `isOpen`), mas pode melhorar:
+
+1. **Historico ja e paginado** (HISTORY_PAGE_SIZE = 10) — ok
+2. **Mensagens ja sao paginadas** (PAGE_SIZE = 10) — ok
+3. **Last messages do historico**: hoje busca TODAS as mensagens de todos os rooms do history e filtra no client (linhas 248-264). Mudar para buscar apenas os rooms visiveis, com `LIMIT 1` por room via database function
+4. **Realtime subscription**: so criar channel apos ter um `roomId` ativo (ja faz isso — ok)
+
+### Fase 3: Otimizar o FAB com unread badge
+
+Hoje o unread count so funciona quando o iframe ja existe (mensagem postMessage). Com lazy iframe:
+1. Na resolucao do visitor (que agora acontece no clique), se houver room ativo, retornar `unread_count` no response
+2. Mostrar badge de unread no FAB puro (sem iframe)
+3. Alternativa mais simples: ao detectar `has_history = true` do resolve (que roda no primeiro clique), mostrar um dot generico
+
+### Fase 4: Cache do widget config
+
+O `get-widget-config` retorna dados que raramente mudam (cores, nome). Cachear em `localStorage` com TTL de 1h para eliminar ate essa request em visitas subsequentes.
+
+## Resumo de Impacto
+
+| Metrica | Antes | Depois |
+|---|---|---|
+| Requests no page load | 7-10 | 1-2 |
+| Iframe carregado | Sempre | So no clique |
+| JS bundle do React carregado | Sempre | So no clique |
+| Realtime channels | Sempre | So com room ativo |
+| History queries | Na abertura | Na abertura (mantido, ja e lazy) |
+
+## Arquivos
+
+| Arquivo | Mudanca |
 |---|---|
-| `mauricio@marqponto.com.br` | Manter admin |
-| `thaina@marqponto.com.br` | Manter admin |
-| `lucas@marqponto.com.br` | **Remover admin** |
-| `felipe@marqponto.com.br` | **Remover admin** |
-| `ana@marqponto.com.br` | **Remover admin** |
-| `matheus@marqponto.com.br` | **Remover admin** |
+| `public/nps-chat-embed.js` | FAB puro em JS, lazy iframe, defer resolve-visitor, cache widget-config |
+| `src/pages/ChatWidget.tsx` | Otimizar query de last_message no history (database function ou limit) |
 
-## Detalhes
+## Paginacao adicional
 
-- Felipe já tem permissões granulares configuradas na tabela `user_permissions` — passará a segui-las imediatamente
-- Lucas, Ana e Matheus **não** têm permissões granulares configuradas — após remover o admin, terão acesso zero até que um admin configure suas permissões na tela de permissões
-- Executado via SQL `DELETE FROM user_roles` para os 4 user_ids específicos
-- Nenhuma alteração de código
+Itens que ja estao paginados e nao precisam de mudanca:
+- History rooms: paginado com `HISTORY_PAGE_SIZE = 10`
+- Mensagens do chat: paginado com `PAGE_SIZE = 10` + scroll-to-load-more
 
-## SQL
-
-```sql
-DELETE FROM user_roles 
-WHERE role = 'admin' 
-AND user_id IN (
-  '58dd7b3c-5844-4177-baf0-2ef09714aa2a',  -- lucas
-  '19c4c328-0627-482f-b787-47b5928e702f',  -- felipe
-  'c148f8fe-000d-4cbf-be57-159dbdad29f5',  -- ana
-  '21aa0988-c5ea-4961-9884-36d2a69b24c1'   -- matheus
-);
-```
-
-**Importante:** Após a execução, Lucas, Ana e Matheus precisarão ter permissões configuradas por um admin (Mauricio ou Thainá) na tela de Permissões, senão não verão nada no sistema.
+Itens a paginar/otimizar:
+- Last messages do history: hoje faz `SELECT * FROM chat_messages WHERE room_id IN (...)` sem limit por room — pode retornar centenas de registros. Solucao: usar `DISTINCT ON (room_id)` via database function ou view
 
