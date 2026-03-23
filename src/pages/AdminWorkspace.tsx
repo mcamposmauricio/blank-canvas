@@ -338,6 +338,8 @@ const AdminWorkspace = () => {
   };
 
   const handleSelectRoom = (id: string) => {
+    lastEffectiveRoomRef.current = null;
+    setPendingSelectedRoom(null);
     setSelectedRoomId(id);
     markRoomAsRead(id);
     setReplyTarget(null);
