@@ -1,82 +1,59 @@
 
 
-# Plano: Otimizacao Completa de Performance do Sistema
+# Plano: Widget Shell Instantaneo + Loading States
 
-O plano anterior (widget) foi implementado. Este plano cobre as otimizacoes do painel admin/operador que foram identificadas mas nao executadas.
+## Problema
 
-## 1. Polling do SidebarDataContext: 30s → 5min
+Quando o usuario clica no FAB, o iframe e criado e carrega o React bundle + queries antes de renderizar qualquer coisa. O usuario ve uma janela vazia por 1-3 segundos ate o layout aparecer.
 
-**Arquivo:** `src/contexts/SidebarDataContext.tsx` linha 286
+## Solucao
 
-Hoje: `setInterval(resyncCounts, 30_000)` — ~120 queries/hora por usuario.
-O Realtime com debounce de 1s ja cobre mudancas em tempo real. O intervalo serve apenas como safety net.
+### 1. Skeleton shell inline no iframe (nps-chat-embed.js)
 
-**Mudanca:** Alterar para `300_000` (5 minutos). Economia: ~108 queries/hora por usuario.
+Ao criar o iframe em `createChatWidget()`, injetar via `srcdoc` um HTML minimo com o layout do widget (header colorido + body skeleton) que aparece **instantaneamente**, antes do React carregar. O iframe so troca para o `src` real apos o skeleton ser exibido.
 
-## 2. Mover `process-chat-auto-rules` para cron job
+**Alternativa mais simples:** Usar o proprio iframe com `src` mas adicionar um overlay skeleton no DOM do host page (fora do iframe) que cobre a area do widget e some quando o iframe envia `postMessage({ type: "chat-toggle" })`.
 
-**Arquivo:** `src/components/SidebarLayout.tsx` linhas 126-150
+**Abordagem escolhida:** Overlay no host page — mais simples, sem mexer no React.
 
-Hoje: cada usuario logado chama a edge function a cada 5 min. Com 6 usuarios = 72 chamadas/hora ao edge function, que por sua vez faz queries no banco.
+No `nps-chat-embed.js`, apos criar o iframe:
+- Criar um `div` overlay posicionado identico ao iframe (fixed, mesmo bottom/right, 420px width, mesma height)
+- Esse div contem: header com gradiente `primaryColor`, skeleton de linhas simulando form/history
+- Quando o iframe envia `chat-toggle` com `isOpen: true`, remover o overlay (React ja renderizou)
 
-**Mudanca:**
-- Criar migracao SQL com `cron.schedule` para chamar `process-chat-auto-rules` a cada 5 min (1 chamada global, nao por usuario)
-- Remover o `useEffect` de polling do `SidebarLayout.tsx`
+### 2. Loading states dentro do ChatWidget.tsx
 
-## 3. Otimizar `fetchRooms` no `useChatRealtime.ts`
-
-**Arquivo:** `src/hooks/useChatRealtime.ts` linhas 222-274
-
-Hoje faz 3 queries separadas apos buscar rooms:
-1. `chat_messages` SELECT para last message (retorna TODAS as mensagens de todos os rooms, filtra no client)
-2. `chat_room_reads` SELECT
-3. `chat_messages` SELECT novamente para unreads
-
-**Mudanca:**
-- Query 1: usar a funcao `get_last_messages_for_rooms` (ja criada na migracao anterior) via RPC em vez de buscar todas as mensagens
-- Queries 2+3 permanecem (sao necessarias para unread count preciso)
-
-Economia: de centenas/milhares de rows retornadas para exatamente 1 row por room.
-
-## 4. Otimizar `useDashboardStats` — batches de first response
-
-**Arquivo:** `src/hooks/useDashboardStats.ts` linhas 282-320
-
-Hoje: busca TODAS as mensagens de atendente em batches de 50 rooms para calcular first response time. Com 200 rooms = 4 queries retornando potencialmente milhares de rows.
-
-**Mudanca:** Criar database function `get_first_response_times(p_room_ids uuid[])` que usa `DISTINCT ON (room_id)` com `ORDER BY created_at ASC` para retornar apenas 1 mensagem por room. Substituir os batches por 1 chamada RPC.
-
-## 5. Consolidar queries do SidebarDataContext
-
-**Arquivo:** `src/contexts/SidebarDataContext.tsx` linhas 35-100
-
-Hoje faz ate 6 queries sequenciais:
-1. `attendant_profiles` (my profile)
-2. `attendant_profiles` (all tenant)
-3. `chat_team_members` (my teams)
-4. `chat_team_members` (team members)
-5. `attendant_profiles` (again, for "other" teams — redundante)
-
-**Mudanca:** Buscar `attendant_profiles` do tenant 1 vez. Buscar `chat_team_members` do tenant 1 vez. Filtrar no client. De 5 queries → 2 queries.
-
-## Resumo de Impacto
-
-| Melhoria | Antes | Depois | Complexidade |
-|---|---|---|---|
-| Resync interval | 120 queries/h/user | 12 queries/h/user | 1 linha |
-| Auto-rules cron | 72 calls/h (6 users) | 12 calls/h (global) | Migration + remover useEffect |
-| fetchRooms last msg | Todas as msgs retornadas | 1 msg/room via RPC | 1 chamada RPC |
-| Dashboard first response | 4 batches, milhares rows | 1 RPC, 1 row/room | Nova DB function |
-| Sidebar queries | 5 queries sequenciais | 2 queries | Refactor JS |
+Adicionar skeleton placeholders nos momentos de carregamento interno:
+- **History phase:** ja tem `Loader2` spinner — trocar por skeleton cards (3 cards placeholder)
+- **Init loading:** enquanto o `useEffect` init roda (busca settings, visitor, room), mostrar skeleton do body em vez de conteudo vazio
 
 ## Arquivos
 
-| Tipo | Arquivo |
+| Arquivo | Mudanca |
 |---|---|
-| Editar | `src/contexts/SidebarDataContext.tsx` — intervalo 30s→300s + consolidar queries |
-| Editar | `src/components/SidebarLayout.tsx` — remover useEffect de polling |
-| Editar | `src/hooks/useChatRealtime.ts` — usar RPC `get_last_messages_for_rooms` |
-| Editar | `src/hooks/useDashboardStats.ts` — usar nova RPC para first response |
-| Migration | Cron job `process-chat-auto-rules` a cada 5 min |
-| Migration | Nova function `get_first_response_times(p_room_ids uuid[])` |
+| `public/nps-chat-embed.js` | Criar overlay skeleton no host page durante carregamento do iframe |
+| `src/pages/ChatWidget.tsx` | Skeleton placeholders para history loading e init loading |
+
+## Detalhes tecnicos
+
+**Overlay skeleton (embed.js):**
+```text
++---------------------------+
+| ████ Header (primaryColor)|
+|                           |
+| ░░░░░░░░░░░░░░ skeleton   |
+| ░░░░░░░░ skeleton          |
+| ░░░░░░░░░░░░ skeleton      |
+|                           |
+| ░░░░░░░░░░░░░░░ button    |
++---------------------------+
+```
+
+O overlay e removido assim que o iframe posta a primeira mensagem `chat-toggle`.
+
+**History skeleton (ChatWidget.tsx):**
+Trocar o `<Loader2>` spinner por 3 cards skeleton com animacao pulse, mantendo o layout visual consistente.
+
+**Init skeleton:**
+Adicionar estado `initLoading` que e `true` ate o `useEffect` init terminar. Enquanto `true`, renderizar skeleton do body (header real + body skeleton).
 
