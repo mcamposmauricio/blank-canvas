@@ -223,6 +223,10 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
   const [chatPage, setChatPage] = useState(0);
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [readOnlyRoom, setReadOnlyRoom] = useState<{ id: string; name: string } | null>(null);
+  const [categoryInfo, setCategoryInfo] = useState<CategoryInfo | null>(null);
+  const [categoryTeams, setCategoryTeams] = useState<TeamInfo[]>([]);
+  const [assignmentInfo, setAssignmentInfo] = useState<AssignmentInfo | null>(null);
+  const [autoRules, setAutoRules] = useState<AutoRuleInfo[]>([]);
   const CHAT_PAGE_SIZE = s.ws_recent_chats_count;
 
   const fetchRecentChats = async (contactId: string | null | undefined, companyContactId: string | null | undefined, page: number) => {
