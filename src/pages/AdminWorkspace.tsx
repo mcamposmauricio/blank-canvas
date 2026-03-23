@@ -82,10 +82,7 @@ const AdminWorkspace = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Auto-collapse info panel on compact screens
-  useEffect(() => {
-    if (isCompact) setInfoPanelOpen(false);
-  }, [isCompact]);
+  // Side panel stays open by default — user can toggle manually
 
   // Polling moved to SidebarLayout for reliability (runs even without Workspace open)
 
