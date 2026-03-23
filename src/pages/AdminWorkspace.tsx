@@ -213,16 +213,23 @@ const AdminWorkspace = () => {
     };
   }, [selectedRoomId, user?.id]);
 
-  // Filter rooms based on viewing context
-  const filteredRooms = viewingUnassigned
-    ? rooms.filter((r) => !r.attendant_id)
-    : viewingAttendantId
-    ? rooms.filter((r) => r.attendant_id === viewingAttendantId)
-    : rooms.filter((r) => {
-        // Show only own chats (not unassigned, not other attendants)
-        if (!r.attendant_id) return false;
-        return r.attendant_id === userAttendantId;
-      });
+  // Filter rooms based on viewing context, always include paramRoomId if navigated directly
+  const filteredRooms = (() => {
+    let filtered = viewingUnassigned
+      ? rooms.filter((r) => !r.attendant_id)
+      : viewingAttendantId
+      ? rooms.filter((r) => r.attendant_id === viewingAttendantId)
+      : rooms.filter((r) => {
+          if (!r.attendant_id) return false;
+          return r.attendant_id === userAttendantId;
+        });
+    // Always include the paramRoomId room so direct links work
+    if (paramRoomId && !filtered.some((r) => r.id === paramRoomId)) {
+      const paramRoom = rooms.find((r) => r.id === paramRoomId);
+      if (paramRoom) filtered = [paramRoom, ...filtered];
+    }
+    return filtered;
+  })();
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
   const [pendingSelectedRoom, setPendingSelectedRoom] = useState<{
