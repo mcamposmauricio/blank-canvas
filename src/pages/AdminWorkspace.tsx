@@ -289,6 +289,8 @@ const AdminWorkspace = () => {
   const isPendingRoom = effectiveRoom?.status === "closed" && (effectiveRoom as any)?.resolution_status === "pending";
 
   const handleSelectPendingRoom = async (roomId: string) => {
+    lastEffectiveRoomRef.current = null;
+    setPendingSelectedRoom(null);
     setSelectedRoomId(roomId);
     setReplyTarget(null);
     // Fetch room data since it's not in the active rooms list
