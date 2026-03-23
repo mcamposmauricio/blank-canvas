@@ -11,11 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Save, Plus, Edit, Trash2, Headphones, Users, Tag, Clock, CheckCircle2, XCircle, MessageSquare, Settings2, ChevronDown, Copy } from "lucide-react";
+import { Save, Plus, Edit, Trash2, Search, Headphones, Users, Tag, Clock, CheckCircle2, XCircle, MessageSquare, Settings2, ChevronDown, Copy } from "lucide-react";
 import AutoMessagesTab from "@/components/chat/AutoMessagesTab";
 import { Separator } from "@/components/ui/separator";
 import ChatApiKeysTab from "@/components/ChatApiKeysTab";
