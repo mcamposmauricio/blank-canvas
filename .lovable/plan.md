@@ -1,35 +1,35 @@
 
 
-# Plano: Ajustar Textarea e Eliminar Scroll Horizontal
+# Plano: Workspace sem scroll horizontal + Textarea 2 linhas
 
 ## Problemas
 
-1. **Textarea muito alta**: O `Textarea` no `ChatInput` usa `min-h-[80px]` (herdado do componente base) — equivale a ~5 linhas. Deveria ter altura para ~3 linhas (~54px) como padrao.
-2. **Scroll horizontal em telas pequenas**: O layout do workspace usa larguras fixas (`w-[240px]` room list + chat area + side panel) que somadas podem ultrapassar a tela. O `overflow-hidden` no container principal deveria impedir isso, mas o `min-w-0` pode nao estar propagando corretamente. Alem disso, o sidebar do app (menu lateral) nao e contabilizado.
+1. **Scroll horizontal com menu aberto:** Sidebar aberta = 256px. Room list = 280px. Sobram ~928px para chat+panel em 1464px. O `ResizablePanelGroup` com percentuais pode gerar overflow quando o side panel esta aberto. O container precisa respeitar `100vw - sidebar_width`.
+2. **Textarea muito alta:** `min-h-[54px]` e ~3.5 linhas vazias. Para 2 linhas o valor correto e `min-h-[36px]` (~2 linhas de texto + padding).
 
 ## Mudancas
 
-### 1. Reduzir altura padrao do Textarea (ChatInput.tsx)
+### 1. AdminWorkspace.tsx — Layout que respeita o sidebar
 
-- Linha 719: mudar `min-h-[36px]` para `min-h-[54px]` (3 linhas) e manter `max-h-[200px]`
-- No componente `Textarea` base (`textarea.tsx`): mudar `min-h-[80px]` para `min-h-0` — o min-height deve ser controlado por quem usa, nao pelo componente generico
+- Trocar `h-screen` por `h-full` no container principal (o parent em SidebarLayout ja controla a altura)
+- Adicionar `max-w-full` ao container para garantir que nunca ultrapasse o espaco disponivel
+- Reduzir room list de `w-[280px]` para `w-[260px]` em desktop para dar mais folga
+- No `ResizablePanelGroup`: manter `min-w-0 overflow-hidden` e ajustar `defaultSize` do side panel de 35 para 30 quando aberto
 
-### 2. Eliminar scroll horizontal (AdminWorkspace.tsx)
+### 2. ChatInput.tsx — Textarea 2 linhas
 
-- Linha 608: adicionar `overflow-x-hidden` ao container principal
-- Linha 611: reduzir largura fixa do room list em telas compactas: `w-[240px]` → `w-[200px]` para dar mais espaco
-- Linha 627: garantir `min-w-0 overflow-hidden` no `ResizablePanelGroup`
+- `min-h-[54px]` → `min-h-[36px]` (2 linhas de texto)
+- Manter `max-h-[200px]` e `resize-y` para expandir ao digitar
 
-### 3. ChatInput — toolbar responsiva
+### 3. SidebarLayout.tsx — Garantir overflow hidden no workspace
 
-- Linha 602: adicionar `flex-wrap` e `min-w-0` ao container dos botoes para que em telas menores os botoes quebrem linha em vez de gerar overflow
-- Alternativa mais limpa: esconder botoes menos usados (Keyboard shortcuts, Articles) em telas compactas via classe `hidden` condicional
+- Verificar que o container do workspace tem `overflow-hidden` para prevenir qualquer scroll horizontal
 
 ## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/ui/textarea.tsx` | `min-h-[80px]` → `min-h-0` |
-| `src/components/chat/ChatInput.tsx` | `min-h-[54px]`, toolbar `flex-wrap min-w-0` |
-| `src/pages/AdminWorkspace.tsx` | `overflow-x-hidden`, room list width menor em compact |
+| `src/pages/AdminWorkspace.tsx` | `h-screen`→`h-full`, room list 260px, panel 30% default |
+| `src/components/chat/ChatInput.tsx` | `min-h-[36px]` |
+| `src/components/SidebarLayout.tsx` | Confirmar `overflow-hidden` no container workspace |
 
