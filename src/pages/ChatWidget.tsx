@@ -282,100 +282,104 @@ const ChatWidget = () => {
 
   useEffect(() => {
     const init = async () => {
-      // Fetch widget display config if ownerUserId is available
-      const ownerForConfig = paramOwnerUserId;
-      if (ownerForConfig && ownerForConfig !== "00000000-0000-0000-0000-000000000000") {
-        const { data: cfg } = await supabase
-          .from("chat_settings")
-          .select("show_outside_hours_banner, outside_hours_title, outside_hours_message, show_all_busy_banner, all_busy_title, all_busy_message, waiting_message, show_email_field, show_phone_field, form_intro_text, show_chat_history, show_csat, allow_file_attachments, allow_multiple_chats")
-          .eq("user_id", ownerForConfig)
-          .maybeSingle();
-        if (cfg) setWidgetConfig(cfg as any);
-      }
-
-      if (paramVisitorToken) {
-        setVisitorToken(paramVisitorToken);
-        localStorage.setItem("chat_visitor_token", paramVisitorToken);
-
-        const { data: visitor } = await supabase
-          .from("chat_visitors")
-          .select("id")
-          .eq("visitor_token", paramVisitorToken)
-          .maybeSingle();
-
-        if (!visitor) return;
-        setVisitorId(visitor.id);
-
-        if (isResolvedVisitor) {
-          // Check for active/waiting room without fetching full history
-          const { data: activeRoom } = await supabase
-            .from("chat_rooms")
-            .select("id, status")
-            .eq("visitor_id", visitor.id)
-            .in("status", ["waiting", "active"])
+      try {
+        // Fetch widget display config if ownerUserId is available
+        const ownerForConfig = paramOwnerUserId;
+        if (ownerForConfig && ownerForConfig !== "00000000-0000-0000-0000-000000000000") {
+          const { data: cfg } = await supabase
+            .from("chat_settings")
+            .select("show_outside_hours_banner, outside_hours_title, outside_hours_message, show_all_busy_banner, all_busy_title, all_busy_message, waiting_message, show_email_field, show_phone_field, form_intro_text, show_chat_history, show_csat, allow_file_attachments, allow_multiple_chats")
+            .eq("user_id", ownerForConfig)
             .maybeSingle();
-
-          if (activeRoom) {
-            setRoomId(activeRoom.id);
-            setPhase(activeRoom.status === "active" ? "chat" : "waiting");
-          } else {
-            setPhase("history");
-          }
-        } else {
-          const { data: room } = await supabase
-            .from("chat_rooms")
-            .select("id, status, attendant_id")
-            .eq("visitor_id", visitor.id)
-            .in("status", ["waiting", "active"])
-            .maybeSingle();
-
-          if (room) {
-            setRoomId(room.id);
-            setPhase(room.status === "active" ? "chat" : "waiting");
-            if (room.status === "active" && room.attendant_id) {
-              await checkRoomAssignment(room.id);
-            }
-          }
+          if (cfg) setWidgetConfig(cfg as any);
         }
-        return;
-      }
 
-      const savedToken = localStorage.getItem("chat_visitor_token");
-      if (savedToken) {
-        setVisitorToken(savedToken);
-        const { data: visitor } = await supabase
-          .from("chat_visitors")
-          .select("id")
-          .eq("visitor_token", savedToken)
-          .maybeSingle();
+        if (paramVisitorToken) {
+          setVisitorToken(paramVisitorToken);
+          localStorage.setItem("chat_visitor_token", paramVisitorToken);
 
-        if (visitor) {
+          const { data: visitor } = await supabase
+            .from("chat_visitors")
+            .select("id")
+            .eq("visitor_token", paramVisitorToken)
+            .maybeSingle();
+
+          if (!visitor) return;
           setVisitorId(visitor.id);
-          const { data: room } = await supabase
-            .from("chat_rooms")
-            .select("id, status, attendant_id")
-            .eq("visitor_id", visitor.id)
-            .in("status", ["waiting", "active"])
+
+          if (isResolvedVisitor) {
+            // Check for active/waiting room without fetching full history
+            const { data: activeRoom } = await supabase
+              .from("chat_rooms")
+              .select("id, status")
+              .eq("visitor_id", visitor.id)
+              .in("status", ["waiting", "active"])
+              .maybeSingle();
+
+            if (activeRoom) {
+              setRoomId(activeRoom.id);
+              setPhase(activeRoom.status === "active" ? "chat" : "waiting");
+            } else {
+              setPhase("history");
+            }
+          } else {
+            const { data: room } = await supabase
+              .from("chat_rooms")
+              .select("id, status, attendant_id")
+              .eq("visitor_id", visitor.id)
+              .in("status", ["waiting", "active"])
+              .maybeSingle();
+
+            if (room) {
+              setRoomId(room.id);
+              setPhase(room.status === "active" ? "chat" : "waiting");
+              if (room.status === "active" && room.attendant_id) {
+                await checkRoomAssignment(room.id);
+              }
+            }
+          }
+          return;
+        }
+
+        const savedToken = localStorage.getItem("chat_visitor_token");
+        if (savedToken) {
+          setVisitorToken(savedToken);
+          const { data: visitor } = await supabase
+            .from("chat_visitors")
+            .select("id")
+            .eq("visitor_token", savedToken)
             .maybeSingle();
 
-          if (room) {
-            setRoomId(room.id);
-            if (room.status === "active") {
-              setPhase("chat");
-              if (room.attendant_id) {
-                const { data: att } = await supabase
-                  .from("attendant_profiles")
-                  .select("display_name")
-                  .eq("id", room.attendant_id)
-                  .maybeSingle();
-                setAttendantName(att?.display_name || "Atendente");
-                setAttendantName(att?.display_name ?? null);
+          if (visitor) {
+            setVisitorId(visitor.id);
+            const { data: room } = await supabase
+              .from("chat_rooms")
+              .select("id, status, attendant_id")
+              .eq("visitor_id", visitor.id)
+              .in("status", ["waiting", "active"])
+              .maybeSingle();
+
+            if (room) {
+              setRoomId(room.id);
+              if (room.status === "active") {
+                setPhase("chat");
+                if (room.attendant_id) {
+                  const { data: att } = await supabase
+                    .from("attendant_profiles")
+                    .select("display_name")
+                    .eq("id", room.attendant_id)
+                    .maybeSingle();
+                  setAttendantName(att?.display_name || "Atendente");
+                  setAttendantName(att?.display_name ?? null);
+                }
+              } else {
+                setPhase("waiting");
               }
-            } else {
-              setPhase("waiting");
             }
           }
         }
+      } finally {
+        setInitLoading(false);
       }
     };
     init();
