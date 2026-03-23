@@ -3210,6 +3210,14 @@ export type Database = {
         Args: { p_tenant_id: string; p_user_id: string }
         Returns: undefined
       }
+      get_last_messages_for_rooms: {
+        Args: { p_room_ids: string[] }
+        Returns: {
+          content: string
+          room_id: string
+          sender_type: string
+        }[]
+      }
       get_user_tenant_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
