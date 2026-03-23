@@ -228,6 +228,7 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
   const [assignmentInfo, setAssignmentInfo] = useState<AssignmentInfo | null>(null);
   const [autoRules, setAutoRules] = useState<AutoRuleInfo[]>([]);
   const CHAT_PAGE_SIZE = s.ws_recent_chats_count;
+  const fieldDefsCache = useRef<FieldDef[] | null>(null);
 
   const fetchRecentChats = async (contactId: string | null | undefined, companyContactId: string | null | undefined, page: number) => {
     if (!contactId && !companyContactId) return;
