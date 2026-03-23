@@ -780,15 +780,15 @@ const AdminWorkspace = () => {
           {effectiveRoom && infoPanelOpen && (
             <>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={30} minSize={isCompact ? 18 : 22} maxSize={40}>
+              <ResizablePanel defaultSize={35} minSize={isCompact ? 22 : 25} maxSize={50}>
                 <div className={`h-full overflow-y-auto ${isCompact ? 'p-1 pr-2 pt-2 pb-2' : 'p-1.5 pr-3 pt-3 pb-3'}`}>
                   <VisitorInfoPanel roomId={effectiveRoom.id} visitorId={effectiveRoom.visitor_id} contactId={effectiveRoom.contact_id} companyContactId={effectiveRoom.company_contact_id} displaySettings={wsDisplaySettings} />
                 </div>
               </ResizablePanel>
             </>
           )}
-        </ResizablePanelGroup>
-      </div>
+          </ResizablePanelGroup>
+        </div>
 
       <CloseRoomDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} onConfirm={handleConfirmClose} roomId={closingRoomId} />
       <ReassignDialog open={reassignOpen} onOpenChange={setReassignOpen} currentAttendantId={effectiveRoom?.attendant_id ?? null} onConfirm={handleReassign} />
