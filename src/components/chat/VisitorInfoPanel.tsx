@@ -327,30 +327,37 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
 
     if (resolvedContactId) {
       group2.push(
-        supabase
-          .from("contacts")
-          .select("id, name, trade_name, health_score, mrr, contract_value, renewal_date, last_nps_score, last_nps_date, city, state, company_sector, company_document, custom_fields, external_id, service_category_id")
-          .eq("id", resolvedContactId)
-          .maybeSingle()
-          .then(({ data }) => { companyData = data as Company | null; setCompany(data as Company | null); }),
-        supabase
-          .from("timeline_events")
-          .select("id, type, title, description, date, user_name, metadata")
-          .eq("contact_id", resolvedContactId)
-          .order("date", { ascending: false })
-          .limit(s.ws_timeline_max_events)
-          .then(({ data }) => { setTimelineEvents((data as TimelineEvent[]) ?? []); }),
+        (async () => {
+          const { data } = await supabase
+            .from("contacts")
+            .select("id, name, trade_name, health_score, mrr, contract_value, renewal_date, last_nps_score, last_nps_date, city, state, company_sector, company_document, custom_fields, external_id, service_category_id")
+            .eq("id", resolvedContactId)
+            .maybeSingle();
+          companyData = data as Company | null;
+          setCompany(data as Company | null);
+        })(),
+        (async () => {
+          const { data } = await supabase
+            .from("timeline_events")
+            .select("id, type, title, description, date, user_name, metadata")
+            .eq("contact_id", resolvedContactId)
+            .order("date", { ascending: false })
+            .limit(s.ws_timeline_max_events);
+          setTimelineEvents((data as TimelineEvent[]) ?? []);
+        })(),
       );
     }
 
     if (resolvedCcId) {
       group2.push(
-        supabase
-          .from("company_contacts")
-          .select("id, name, email, phone, role, department, external_id, chat_total, chat_avg_csat, chat_last_at, custom_fields")
-          .eq("id", resolvedCcId)
-          .maybeSingle()
-          .then(({ data }) => { setCompanyContact(data as CompanyContact | null); }),
+        (async () => {
+          const { data } = await supabase
+            .from("company_contacts")
+            .select("id, name, email, phone, role, department, external_id, chat_total, chat_avg_csat, chat_last_at, custom_fields")
+            .eq("id", resolvedCcId)
+            .maybeSingle();
+          setCompanyContact(data as CompanyContact | null);
+        })(),
       );
     }
 
