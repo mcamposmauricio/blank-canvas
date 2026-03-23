@@ -162,6 +162,7 @@ const DEFAULT_SETTINGS: WorkspaceDisplaySettings = {
   ws_timeline_max_events: 10,
   ws_show_recent_chats: true,
   ws_recent_chats_count: 5,
+  ws_show_queue_info: true,
 };
 
 interface VisitorInfoPanelProps {
