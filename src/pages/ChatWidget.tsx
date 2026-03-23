@@ -1531,7 +1531,7 @@ const ChatWidget = () => {
         )}
 
         {/* ===== WAITING PHASE ===== */}
-        {phase === "waiting" && (
+        {!initLoading && phase === "waiting" && (
           <div className="flex-1 flex flex-col min-h-0">
             {/* Indeterminate progress bar */}
             <div className="h-0.5 w-full bg-muted overflow-hidden">
