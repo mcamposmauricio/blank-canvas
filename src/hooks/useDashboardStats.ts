@@ -277,19 +277,15 @@ export function useDashboardStats(filters: DashboardFilters) {
     closedRooms.forEach(r => { const st = r.resolution_status ?? "pending"; resDist[st] = (resDist[st] ?? 0) + 1; });
     const resolutionDistribution = Object.entries(resDist).map(([status, count]) => ({ status, count }));
 
-    // Avg first response
+    // Avg first response — single RPC call instead of batched queries
     let avgFirstResponseMinutes: number | null = null;
     const roomIds = rooms.map(r => r.id);
     if (roomIds.length > 0) {
-      const batchSize = 50;
-      const allMessages: any[] = [];
-      for (let i = 0; i < Math.min(roomIds.length, 200); i += batchSize) {
-        const batch = roomIds.slice(i, i + batchSize);
-        const { data: msgs } = await supabase.from("chat_messages").select("room_id, created_at").in("room_id", batch).eq("sender_type", "attendant").order("created_at", { ascending: true });
-        if (msgs) allMessages.push(...msgs);
-      }
+      const { data: firstResponses } = await supabase.rpc("get_first_response_times", {
+        p_room_ids: roomIds.slice(0, 500),
+      });
       const firstByRoom: Record<string, string> = {};
-      allMessages.forEach(m => { if (!firstByRoom[m.room_id]) firstByRoom[m.room_id] = m.created_at; });
+      (firstResponses ?? []).forEach((m: any) => { firstByRoom[m.room_id] = m.created_at; });
       const responseTimes: number[] = [];
       rooms.forEach(r => { if (r.created_at && firstByRoom[r.id]) { const diff = (new Date(firstByRoom[r.id]).getTime() - new Date(r.created_at).getTime()) / 60000; if (diff >= 0) responseTimes.push(diff); } });
       if (responseTimes.length > 0) avgFirstResponseMinutes = Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length);

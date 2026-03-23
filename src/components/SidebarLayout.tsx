@@ -123,31 +123,7 @@ export default function SidebarLayout() {
     };
   }, [user]);
 
-  // Polling for time-based auto rules (every 5 min)
-  useEffect(() => {
-    if (!user) return;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    let cancelled = false;
-
-    const poll = async () => {
-      if (cancelled) return;
-      try {
-        await supabase.functions.invoke("process-chat-auto-rules");
-      } catch {
-        // silent
-      }
-      if (!cancelled) {
-        timeoutId = setTimeout(poll, 300_000);
-      }
-    };
-
-    timeoutId = setTimeout(poll, 15_000);
-
-    return () => {
-      cancelled = true;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [user]);
+  // Auto-rules processing moved to pg_cron (runs globally every 5 min)
 
   const themeClass = isDark ? "dark" : "";
 
