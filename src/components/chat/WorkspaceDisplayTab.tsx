@@ -60,6 +60,7 @@ const DEFAULTS: WorkspaceSettings = {
   ws_hidden_custom_fields: [],
   ws_timeline_max_events: 10,
   ws_default_panel_open: true,
+  ws_show_queue_info: true,
 };
 
 interface CustomFieldDef {
