@@ -175,9 +175,9 @@ export default function SidebarLayout() {
           localStorage.setItem("sidebar-open", String(open));
         }}
       >
-        <div className={`${themeClass} min-h-screen flex w-full bg-background text-foreground`}>
+        <div className={`${themeClass} h-screen flex w-full bg-background text-foreground overflow-hidden`}>
           <AppSidebar isDark={isDark} onToggleTheme={toggleTheme} />
-          <main className="flex-1 flex flex-col">
+          <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {/* Impersonation banner */}
             {isImpersonating && (
               <div className="h-10 bg-amber-500/90 text-amber-950 flex items-center justify-center gap-2 text-sm font-medium px-4 shrink-0">

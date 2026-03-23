@@ -770,7 +770,7 @@ const AdminWorkspace = () => {
                       </Button>
                     </div>
                   </div>
-                  <div className="flex-1 overflow-auto">
+                  <div className="flex-1 min-h-0 overflow-auto">
                     <ChatMessageList messages={messages} loading={messagesLoading} onReply={handleReply} onDelete={handleDeleteMessage} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} typingUser={typingUser} visitorLastReadAt={visitorLastReadAt} />
                   </div>
                   {effectiveRoom.status !== "closed" && (
