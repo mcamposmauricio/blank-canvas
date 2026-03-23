@@ -1616,7 +1616,7 @@ const ChatWidget = () => {
         )}
 
         {/* ===== CHAT / TRANSCRIPT MESSAGES ===== */}
-        {(phase === "chat" || phase === "csat" || phase === "closed" || phase === "viewTranscript") && (
+        {!initLoading && (phase === "chat" || phase === "csat" || phase === "closed" || phase === "viewTranscript") && (
           <div className="flex-1 overflow-y-auto p-4 min-h-0" ref={scrollRef}>
             {hasMoreMessages && (
               <button
