@@ -55,6 +55,33 @@ interface Company {
   company_document: string | null;
   custom_fields: Record<string, any> | null;
   external_id: string | null;
+  service_category_id: string | null;
+}
+
+interface CategoryInfo {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
+interface TeamInfo {
+  id: string;
+  name: string;
+}
+
+interface AssignmentInfo {
+  model: string;
+  capacity_limit: number;
+  online_only: boolean;
+  enabled: boolean;
+}
+
+interface AutoRuleInfo {
+  id: string;
+  rule_type: string;
+  trigger_minutes: number | null;
+  message_content: string | null;
+  close_resolution_status: string;
 }
 
 interface TimelineEvent {
