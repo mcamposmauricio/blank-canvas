@@ -33,88 +33,48 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
   const otherTeamsTotalChats = otherTeamAttendants.reduce((sum, a) => sum + a.active_count, 0);
 
   const initializeData = useCallback(async (userId: string, adminStatus: boolean, currentTenantId?: string | null, masterImpersonating?: boolean) => {
-    const { data: myProfile } = await supabase
+    // Consolidated: fetch ALL attendants + ALL team members in 2 parallel queries
+    let attQuery = supabase
       .from("attendant_profiles")
-      .select("id")
-      .eq("user_id", userId)
-      .maybeSingle();
+      .select("id, display_name, user_id, status, active_conversations");
+    if (currentTenantId) attQuery = attQuery.eq("tenant_id", currentTenantId);
+
+    let tmQuery = supabase
+      .from("chat_team_members")
+      .select("team_id, attendant_id");
+    if (currentTenantId) tmQuery = tmQuery.eq("tenant_id", currentTenantId);
+
+    const [{ data: allAttendants }, { data: allTeamMembers }] = await Promise.all([attQuery, tmQuery]);
+    const attendantsList = allAttendants ?? [];
+    const teamMembersList = allTeamMembers ?? [];
+
+    // Find my profile from the already-fetched list
+    const myProfile = attendantsList.find((a: any) => a.user_id === userId);
 
     let attendants: any[] = [];
-    let myTeamAttendantIds: string[] = [];
     let otherAttendants: any[] = [];
 
-    if (masterImpersonating && currentTenantId) {
-      const { data } = await supabase
-        .from("attendant_profiles")
-        .select("id, display_name, user_id, status, active_conversations")
-        .eq("tenant_id", currentTenantId);
-      attendants = data ?? [];
-    } else if (adminStatus) {
-      let adminQuery = supabase
-        .from("attendant_profiles")
-        .select("id, display_name, user_id, status, active_conversations");
-      if (currentTenantId) adminQuery = adminQuery.eq("tenant_id", currentTenantId);
-      const { data: allData } = await adminQuery;
-      const allAttendants = allData ?? [];
-
-      if (myProfile) {
-        const { data: myTeams } = await supabase
-          .from("chat_team_members")
-          .select("team_id")
-          .eq("attendant_id", myProfile.id);
-        if (myTeams && myTeams.length > 0) {
-          const teamIds = myTeams.map((t: any) => t.team_id);
-          const { data: teamMembers } = await supabase
-            .from("chat_team_members")
-            .select("attendant_id")
-            .in("team_id", teamIds);
-          const myTeamIds = new Set((teamMembers ?? []).map((m: any) => m.attendant_id));
-          myTeamAttendantIds = [...myTeamIds];
-          attendants = allAttendants.filter((a: any) => myTeamIds.has(a.id));
-          otherAttendants = allAttendants.filter((a: any) => !myTeamIds.has(a.id));
-        } else {
-          attendants = allAttendants;
-        }
-      } else {
-        attendants = allAttendants;
-      }
+    if (masterImpersonating || (adminStatus && !myProfile)) {
+      // Admin/master without profile: show all
+      attendants = attendantsList;
     } else if (myProfile) {
-      const { data: myTeams } = await supabase
-        .from("chat_team_members")
-        .select("team_id")
-        .eq("attendant_id", myProfile.id);
-      if (myTeams && myTeams.length > 0) {
-        const teamIds = myTeams.map((t: any) => t.team_id);
-        const { data: teamMembers } = await supabase
-          .from("chat_team_members")
-          .select("attendant_id")
-          .in("team_id", teamIds);
-        const uniqueIds = [...new Set((teamMembers ?? []).map((m: any) => m.attendant_id))];
-        myTeamAttendantIds = uniqueIds;
-        if (uniqueIds.length > 0) {
-          const { data } = await supabase
-            .from("attendant_profiles")
-            .select("id, display_name, user_id, status, active_conversations")
-            .in("id", uniqueIds);
-          attendants = data ?? [];
-        }
-      } else {
-        const { data } = await supabase
-          .from("attendant_profiles")
-          .select("id, display_name, user_id, status, active_conversations")
-          .eq("user_id", userId);
-        attendants = data ?? [];
-        myTeamAttendantIds = (data ?? []).map((a: any) => a.id);
-      }
-    }
+      // Find my teams from the already-fetched team members
+      const myTeamIds = new Set(
+        teamMembersList.filter((m: any) => m.attendant_id === myProfile.id).map((m: any) => m.team_id)
+      );
 
-    if (!adminStatus && !masterImpersonating && currentTenantId && myProfile) {
-      const { data: allTenant } = await supabase
-        .from("attendant_profiles")
-        .select("id, display_name, user_id, status, active_conversations")
-        .eq("tenant_id", currentTenantId);
-      const myIds = new Set(myTeamAttendantIds);
-      otherAttendants = (allTenant ?? []).filter((a: any) => !myIds.has(a.id));
+      if (myTeamIds.size > 0) {
+        const myTeamAttendantIds = new Set(
+          teamMembersList.filter((m: any) => myTeamIds.has(m.team_id)).map((m: any) => m.attendant_id)
+        );
+        attendants = attendantsList.filter((a: any) => myTeamAttendantIds.has(a.id));
+        otherAttendants = attendantsList.filter((a: any) => !myTeamAttendantIds.has(a.id));
+      } else if (adminStatus) {
+        attendants = attendantsList;
+      } else {
+        attendants = attendantsList.filter((a: any) => a.user_id === userId);
+        otherAttendants = attendantsList.filter((a: any) => a.user_id !== userId);
+      }
     }
 
     let unassignedQuery = supabase
