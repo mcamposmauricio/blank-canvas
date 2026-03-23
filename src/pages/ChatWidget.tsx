@@ -1384,8 +1384,22 @@ const ChatWidget = () => {
               </button>
 
               {historyLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="rounded-xl border border-border/60 overflow-hidden animate-pulse">
+                      <div className="flex">
+                        <div className="w-1 shrink-0 rounded-l-xl bg-muted" />
+                        <div className="flex-1 p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-3.5 w-3.5 rounded-full bg-muted" />
+                            <div className="h-3 w-20 bg-muted rounded" />
+                          </div>
+                          <div className="h-3 w-3/4 bg-muted/70 rounded" />
+                          <div className="h-2.5 w-1/2 bg-muted/50 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : historyRooms.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">Nenhuma conversa anterior.</p>
