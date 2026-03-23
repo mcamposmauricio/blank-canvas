@@ -351,6 +351,70 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
     }
 
     await Promise.all(promises);
+
+    // Fetch queue/category info and auto rules in parallel
+    const fetchQueueInfo = async (companyData: Company | null) => {
+      const catId = companyData?.service_category_id;
+      
+      // Fetch category + auto rules in parallel
+      const [catRes, rulesRes] = await Promise.all([
+        catId
+          ? supabase.from("chat_service_categories").select("id, name, color").eq("id", catId).maybeSingle()
+          : supabase.from("chat_service_categories").select("id, name, color").eq("is_default", true).maybeSingle(),
+        supabase.from("chat_auto_rules").select("id, rule_type, trigger_minutes, message_content, close_resolution_status").eq("is_enabled", true).order("sort_order", { ascending: true }),
+      ]);
+
+      const cat = catRes.data as CategoryInfo | null;
+      setCategoryInfo(cat);
+      setAutoRules((rulesRes.data as AutoRuleInfo[]) ?? []);
+
+      if (cat) {
+        // Fetch teams for this category
+        const { data: ctData } = await supabase
+          .from("chat_category_teams")
+          .select("id, team_id")
+          .eq("category_id", cat.id);
+
+        const ctList = ctData ?? [];
+        if (ctList.length > 0) {
+          const teamIds = ctList.map((ct: any) => ct.team_id);
+          const ctIds = ctList.map((ct: any) => ct.id);
+
+          const [teamsRes, configRes] = await Promise.all([
+            supabase.from("chat_teams").select("id, name").in("id", teamIds),
+            supabase.from("chat_assignment_configs").select("model, capacity_limit, online_only, enabled").in("category_team_id", ctIds).limit(1).maybeSingle(),
+          ]);
+
+          setCategoryTeams((teamsRes.data as TeamInfo[]) ?? []);
+          setAssignmentInfo(configRes.data as AssignmentInfo | null);
+        } else {
+          setCategoryTeams([]);
+          setAssignmentInfo(null);
+        }
+      } else {
+        setCategoryTeams([]);
+        setAssignmentInfo(null);
+      }
+    };
+
+    // We need the company data that was just fetched
+    // Re-read from state won't work (async), so re-query if needed
+    if (resolvedContactId) {
+      const { data: companyForQueue } = await supabase
+        .from("contacts")
+        .select("service_category_id")
+        .eq("id", resolvedContactId)
+        .maybeSingle();
+      await fetchQueueInfo({ service_category_id: companyForQueue?.service_category_id } as Company);
+    } else {
+      // No company — just fetch auto rules
+      const { data: rulesData } = await supabase.from("chat_auto_rules").select("id, rule_type, trigger_minutes, message_content, close_resolution_status").eq("is_enabled", true).order("sort_order", { ascending: true });
+      setAutoRules((rulesData as AutoRuleInfo[]) ?? []);
+      setCategoryInfo(null);
+      setCategoryTeams([]);
+      setAssignmentInfo(null);
+    }
+
     await fetchRecentChats(resolvedContactId, resolvedCcId, 0);
 
     setLoading(false);
