@@ -143,6 +143,7 @@ const WorkspaceDisplayTab = () => {
           ws_hidden_custom_fields: d.ws_hidden_custom_fields ?? DEFAULTS.ws_hidden_custom_fields,
           ws_timeline_max_events: d.ws_timeline_max_events ?? DEFAULTS.ws_timeline_max_events,
           ws_default_panel_open: d.ws_default_panel_open ?? DEFAULTS.ws_default_panel_open,
+          ws_show_queue_info: d.ws_show_queue_info ?? DEFAULTS.ws_show_queue_info,
         };
         setWs(loaded);
         setSavedWs(loaded);
