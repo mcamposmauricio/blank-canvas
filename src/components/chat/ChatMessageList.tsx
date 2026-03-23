@@ -118,7 +118,10 @@ export function ChatMessageList({ messages, loading, onReply, onDelete, hasMore,
               className={`flex ${msg.sender_type === "system" ? "justify-center" : msg.sender_type === "visitor" ? "justify-start" : "justify-end"} group`}
             >
               {msg.sender_type === "system" ? (
-                <p className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200/60 rounded-full px-3 py-1.5 text-center max-w-[85%] my-1">
+                <p
+                  className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200/60 rounded-full px-3 py-1.5 text-center max-w-[85%] my-1 cursor-default"
+                  title={new Date(msg.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                >
                   {mainContent || msg.content}
                 </p>
               ) : msg.deleted_at ? (
