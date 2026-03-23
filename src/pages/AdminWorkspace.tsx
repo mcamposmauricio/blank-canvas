@@ -497,7 +497,7 @@ const AdminWorkspace = () => {
   if (isMobile) {
     return (
       <>
-        <div className="-m-4 md:-m-6 lg:-m-8 h-screen flex flex-col bg-transparent overflow-hidden">
+        <div className="h-screen flex flex-col bg-transparent overflow-hidden">
           {mobileView === "list" && (
             <ChatRoomList rooms={filteredRooms} selectedRoomId={selectedRoomId} onSelectRoom={handleSelectRoom} loading={roomsLoading} />
           )}
