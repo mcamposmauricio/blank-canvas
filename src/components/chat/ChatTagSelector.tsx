@@ -57,9 +57,11 @@ export function ChatTagSelector({ roomId, compact }: ChatTagSelectorProps) {
     const { error } = await supabase
       .from("chat_room_tags")
       .insert({ room_id: roomId, tag_id: tagId });
-    if (!error) {
-      setSelectedTagIds((prev) => new Set(prev).add(tagId));
+    if (error) {
+      toast.error("Erro ao adicionar tag");
+      return;
     }
+    setSelectedTagIds((prev) => new Set(prev).add(tagId));
   };
 
   const removeTag = async (tagId: string) => {
@@ -68,13 +70,15 @@ export function ChatTagSelector({ roomId, compact }: ChatTagSelectorProps) {
       .delete()
       .eq("room_id", roomId)
       .eq("tag_id", tagId);
-    if (!error) {
-      setSelectedTagIds((prev) => {
-        const next = new Set(prev);
-        next.delete(tagId);
-        return next;
-      });
+    if (error) {
+      toast.error("Erro ao remover tag");
+      return;
     }
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev);
+      next.delete(tagId);
+      return next;
+    });
   };
 
   const createTag = async () => {
@@ -82,9 +86,15 @@ export function ChatTagSelector({ roomId, compact }: ChatTagSelectorProps) {
     if (!name || !user) return;
     setCreating(true);
     const color = RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)];
+    // Fetch tenant_id for the current user
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("tenant_id")
+      .eq("user_id", user.id)
+      .single();
     const { data, error } = await supabase
       .from("chat_tags")
-      .insert({ name, color, user_id: user.id })
+      .insert({ name, color, user_id: user.id, tenant_id: profile?.tenant_id ?? null })
       .select("id, name, color")
       .single();
 

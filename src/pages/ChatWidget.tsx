@@ -1835,16 +1835,24 @@ const ChatWidget = () => {
 
       {/* ===== FILE PREVIEW BAR ===== */}
       {phase === "chat" && pendingFile && (
-        <div className="border-t px-4 py-2 flex items-center gap-2 bg-muted/20 animate-slide-up">
+        <div className="border-t px-4 py-2 flex items-center gap-2 bg-muted/20 animate-slide-up relative">
+          {uploading && (
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center gap-2 z-10 rounded">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-xs font-medium text-muted-foreground">Enviando arquivo...</span>
+            </div>
+          )}
           {pendingFile.type.startsWith("image/") ? (
             <img src={URL.createObjectURL(pendingFile)} alt="" className="h-8 w-8 rounded-lg object-cover" />
           ) : (
             <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
           <span className="text-xs truncate flex-1 text-muted-foreground">{pendingFile.name}</span>
-          <button onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-3.5 w-3.5" />
-          </button>
+          {!uploading && (
+            <button onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="text-muted-foreground hover:text-foreground transition-colors">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
 
