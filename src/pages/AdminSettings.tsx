@@ -66,7 +66,7 @@ interface BusinessHourOverride {
   offline_message: string;
 }
 
-
+const MACROS_PER_PAGE = 12;
 const DAY_NAMES_PT = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const DAY_NAMES_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
