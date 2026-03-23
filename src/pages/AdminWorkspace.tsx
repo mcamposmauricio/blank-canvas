@@ -229,23 +229,33 @@ const AdminWorkspace = () => {
   })();
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
+  const lastEffectiveRoomRef = useRef<any>(null);
+  const cleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingSelectedRoom, setPendingSelectedRoom] = useState<{
     id: string; visitor_name: string; visitor_id: string; status: string;
     resolution_status: string; attendant_id: string | null; contact_id: string | null;
     company_contact_id: string | null; started_at: string | null;
   } | null>(null);
 
-  // Clear selectedRoomId if no longer in filteredRooms (and not a pending room)
-  // Never clear if it matches paramRoomId (user navigated intentionally via link)
+  // Clear selectedRoomId if no longer in filteredRooms (debounced to avoid flicker during refetches)
   useEffect(() => {
     if (!selectedRoomId) return;
     if (pendingSelectedRoom) return;
     if (paramRoomId && selectedRoomId === paramRoomId) return;
     const found = filteredRooms.some((r) => r.id === selectedRoomId);
     if (!found && !roomsLoading) {
-      setSelectedRoomId(null);
-      setReplyTarget(null);
+      if (cleanupTimerRef.current) clearTimeout(cleanupTimerRef.current);
+      cleanupTimerRef.current = setTimeout(() => {
+        setSelectedRoomId(null);
+        setReplyTarget(null);
+      }, 500);
+    } else {
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current);
+        cleanupTimerRef.current = null;
+      }
     }
+    return () => { if (cleanupTimerRef.current) clearTimeout(cleanupTimerRef.current); };
   }, [filteredRooms, selectedRoomId, roomsLoading, pendingSelectedRoom, paramRoomId]);
 
   // If paramRoomId is set but room is not in rooms list, fetch it directly
@@ -272,7 +282,9 @@ const AdminWorkspace = () => {
     })();
   }, [paramRoomId, rooms, roomsLoading, user]);
 
-  const effectiveRoom = selectedRoom ?? pendingSelectedRoom;
+  const rawEffectiveRoom = selectedRoom ?? pendingSelectedRoom;
+  if (rawEffectiveRoom) lastEffectiveRoomRef.current = rawEffectiveRoom;
+  const effectiveRoom = rawEffectiveRoom ?? lastEffectiveRoomRef.current;
   const isPendingRoom = effectiveRoom?.status === "closed" && (effectiveRoom as any)?.resolution_status === "pending";
 
   const handleSelectPendingRoom = async (roomId: string) => {
