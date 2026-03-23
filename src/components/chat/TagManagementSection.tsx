@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { Plus, Edit, Trash2, Search, Tag } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, Edit, Trash2, Search } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,7 +18,6 @@ interface TagItem {
   name: string;
   color: string | null;
   created_at: string | null;
-  usage_count: number;
 }
 
 const TAGS_PER_PAGE = 24;
@@ -32,30 +31,16 @@ const TagManagementSection = () => {
   const [editingTag, setEditingTag] = useState<TagItem | null>(null);
   const [form, setForm] = useState({ name: "", color: "#6366f1" });
   const [deleteTag, setDeleteTag] = useState<TagItem | null>(null);
+  const [deleteUsageCount, setDeleteUsageCount] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
   const fetchTags = useCallback(async () => {
-    const { data: tagsData } = await supabase
+    const { data } = await supabase
       .from("chat_tags")
       .select("id, name, color, created_at")
       .order("name");
-
-    if (tagsData) {
-      const { data: usageData } = await supabase
-        .from("chat_room_tags")
-        .select("tag_id");
-
-      const usageMap = new Map<string, number>();
-      (usageData ?? []).forEach((u) => {
-        usageMap.set(u.tag_id, (usageMap.get(u.tag_id) ?? 0) + 1);
-      });
-
-      setTags(tagsData.map((tag) => ({
-        ...tag,
-        usage_count: usageMap.get(tag.id) ?? 0,
-      })));
-    }
+    if (data) setTags(data);
     setLoading(false);
   }, []);
 
@@ -87,23 +72,24 @@ const TagManagementSection = () => {
   const saveTag = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-
     if (editingTag) {
-      await supabase.from("chat_tags").update({
-        name: form.name,
-        color: form.color,
-      }).eq("id", editingTag.id);
+      await supabase.from("chat_tags").update({ name: form.name, color: form.color }).eq("id", editingTag.id);
     } else {
-      await supabase.from("chat_tags").insert({
-        user_id: session.user.id,
-        name: form.name,
-        color: form.color,
-      });
+      await supabase.from("chat_tags").insert({ user_id: session.user.id, name: form.name, color: form.color });
     }
-
     setDialogOpen(false);
     toast({ title: t("chat.settings.saved") });
     fetchTags();
+  };
+
+  const handleDeleteClick = async (tag: TagItem) => {
+    setDeleteTag(tag);
+    setDeleteUsageCount(null);
+    const { count } = await supabase
+      .from("chat_room_tags")
+      .select("tag_id", { count: "exact", head: true })
+      .eq("tag_id", tag.id);
+    setDeleteUsageCount(count ?? 0);
   };
 
   const confirmDelete = async () => {
@@ -114,8 +100,6 @@ const TagManagementSection = () => {
     toast({ title: t("chat.settings.saved") });
     fetchTags();
   };
-
-  if (loading) return null;
 
   return (
     <>
@@ -147,46 +131,52 @@ const TagManagementSection = () => {
           )}
         </CardHeader>
         <CardContent>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-9 w-full" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               {search ? "Nenhuma tag encontrada" : t("chat.tags.no_tags")}
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {paginated.map((tag) => (
-                  <div
-                    key={tag.id}
-                    className="group relative flex items-center gap-3 rounded-lg border border-border/50 bg-secondary/30 p-3 transition-colors hover:bg-secondary/60"
-                  >
-                    <div
-                      className="h-3 w-3 rounded-full shrink-0 ring-2 ring-background"
-                      style={{ backgroundColor: tag.color ?? "#6366f1" }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <Badge variant="outline" className="text-xs font-medium truncate max-w-full" style={{ borderColor: tag.color ?? undefined, color: tag.color ?? undefined }}>
-                        {tag.name}
-                      </Badge>
-                      <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
-                        <span className="tabular-nums">{tag.usage_count} uso{tag.usage_count !== 1 ? "s" : ""}</span>
-                        {tag.created_at && (
-                          <>
-                            <span>·</span>
-                            <span>{format(new Date(tag.created_at), "dd/MM/yyyy")}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openDialog(tag)}>
-                        <Edit className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteTag(tag)}>
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+              <div className="border rounded-md overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left font-medium px-3 py-2 text-muted-foreground">Cor</th>
+                      <th className="text-left font-medium px-3 py-2 text-muted-foreground">Nome</th>
+                      <th className="text-left font-medium px-3 py-2 text-muted-foreground hidden sm:table-cell">Criada em</th>
+                      <th className="text-right font-medium px-3 py-2 text-muted-foreground w-20">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginated.map((tag) => (
+                      <tr key={tag.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                        <td className="px-3 py-2 w-10">
+                          <div className="h-3 w-3 rounded-full ring-1 ring-border" style={{ backgroundColor: tag.color ?? "#6366f1" }} />
+                        </td>
+                        <td className="px-3 py-2 font-medium">{tag.name}</td>
+                        <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">
+                          {tag.created_at ? format(new Date(tag.created_at), "dd/MM/yyyy") : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex justify-end gap-0.5">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openDialog(tag)}>
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteClick(tag)}>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               {totalPages > 1 && (
@@ -206,11 +196,7 @@ const TagManagementSection = () => {
                             {idx > 0 && arr[idx - 1] !== p - 1 && (
                               <span className="px-2 text-muted-foreground">…</span>
                             )}
-                            <PaginationLink
-                              isActive={p === currentPage}
-                              onClick={() => setPage(p)}
-                              className="cursor-pointer"
-                            >
+                            <PaginationLink isActive={p === currentPage} onClick={() => setPage(p)} className="cursor-pointer">
                               {p}
                             </PaginationLink>
                           </PaginationItem>
@@ -230,7 +216,6 @@ const TagManagementSection = () => {
         </CardContent>
       </Card>
 
-      {/* Edit/Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -256,18 +241,19 @@ const TagManagementSection = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteTag} onOpenChange={(open) => !open && setDeleteTag(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
             <AlertDialogDescription>
               {t("chat.tags.delete_confirm")}
-              {deleteTag && deleteTag.usage_count > 0 && (
+              {deleteUsageCount === null ? (
+                <span className="block mt-2 text-muted-foreground text-xs">Verificando uso...</span>
+              ) : deleteUsageCount > 0 ? (
                 <span className="block mt-2 font-medium">
-                  Esta tag está sendo usada em {deleteTag.usage_count} conversa(s).
+                  Esta tag está sendo usada em {deleteUsageCount} conversa(s).
                 </span>
-              )}
+              ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
