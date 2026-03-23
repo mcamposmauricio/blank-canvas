@@ -625,7 +625,7 @@ const AdminWorkspace = () => {
       <div className="h-full flex flex-col bg-transparent overflow-hidden w-full max-w-full">
         <div className="flex-1 flex min-h-0">
           {/* Left: Room list — fixed width */}
-          <div className={`h-full flex flex-col border-r shrink-0 ${isCompact ? 'w-[200px]' : 'w-[260px]'}`}>
+          <div className={`h-full flex flex-col border-r shrink-0 ${isCompact ? 'w-[240px]' : 'w-[312px]'}`}>
             <div className={`h-full flex flex-col ${isCompact ? 'p-1 pl-2 pt-2 pb-2' : 'p-1.5 pl-3 pt-3 pb-3'}`}>
               <div className="mb-2 px-1">
                 <Button size="sm" className="w-full gap-1" onClick={() => setProactiveChatOpen(true)}>
