@@ -165,6 +165,7 @@ const AdminWorkspace = () => {
     setSelectedRoomId(null);
     setPendingSelectedRoom(null);
     setReplyTarget(null);
+    lastEffectiveRoomRef.current = null;
   }, [viewingAttendantId, viewingUnassigned]);
 
   useEffect(() => {
