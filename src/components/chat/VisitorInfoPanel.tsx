@@ -137,6 +137,7 @@ export interface WorkspaceDisplaySettings {
   ws_timeline_max_events: number;
   ws_show_recent_chats: boolean;
   ws_recent_chats_count: number;
+  ws_show_queue_info?: boolean;
 }
 
 const DEFAULT_SETTINGS: WorkspaceDisplaySettings = {
