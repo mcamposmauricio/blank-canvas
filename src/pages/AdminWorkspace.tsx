@@ -605,10 +605,10 @@ const AdminWorkspace = () => {
   // Desktop layout with resizable panels
   return (
     <>
-      <div className="h-screen flex flex-col bg-transparent overflow-hidden w-full">
+      <div className="h-screen flex flex-col bg-transparent overflow-hidden overflow-x-hidden w-full">
         <div className="flex-1 flex min-h-0">
           {/* Left: Room list — fixed width */}
-          <div className={`h-full flex flex-col border-r shrink-0 ${isCompact ? 'w-[240px]' : 'w-[280px]'}`}>
+          <div className={`h-full flex flex-col border-r shrink-0 ${isCompact ? 'w-[200px]' : 'w-[280px]'}`}>
             <div className={`h-full flex flex-col ${isCompact ? 'p-1 pl-2 pt-2 pb-2' : 'p-1.5 pl-3 pt-3 pb-3'}`}>
               <div className="mb-2 px-1">
                 <Button size="sm" className="w-full gap-1" onClick={() => setProactiveChatOpen(true)}>
@@ -624,7 +624,7 @@ const AdminWorkspace = () => {
           </div>
 
           {/* Center + Right: Chat area + Side panel — resizable between them */}
-          <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
+          <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0 overflow-hidden">
           <ResizablePanel defaultSize={infoPanelOpen ? 65 : 100} minSize={40}>
             <div className={`h-full min-w-0 ${isCompact ? 'p-1 pt-2 pb-2' : 'p-1.5 pt-3 pb-3'}`}>
               {effectiveRoom ? (
