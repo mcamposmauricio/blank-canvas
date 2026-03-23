@@ -1,29 +1,39 @@
 
 
-# Plano: Corrigir ChatInput que aparece e depois some
+# Plano: Fixar Workspace na viewport — aplicar mudancas pendentes
 
-## Causa provavel
+## Problema
 
-O `effectiveRoom` (linha 275) depende de `selectedRoom` que vem de `rooms.find()`. Quando o `useChatRealtime` refaz o fetch dos rooms (via realtime trigger ou polling), o array `rooms` e substituido — durante esse refetch, `selectedRoom` fica `undefined` momentaneamente. Como `pendingSelectedRoom` tambem e `null` para rooms normais, `effectiveRoom` fica `null` e todo o bloco do chat (incluindo ChatInput) desmonta.
+O plano anterior (trocar `min-h-screen` por `h-screen`) foi aprovado mas nao foi implementado. O layout ainda permite crescimento vertical alem da tela, empurrando o ChatInput para fora.
 
-Ao completar o refetch, `selectedRoom` volta e o chat remonta — mas o ChatInput some e nao reaparece visivelmente porque o textarea perde o foco/estado.
+## Mudancas
 
-Alem disso, o `useEffect` na linha 240-249 pode limpar `selectedRoomId` se o room sair momentaneamente de `filteredRooms` durante um re-render.
+### 1. SidebarLayout.tsx (linha 178)
 
-## Correcao
+`min-h-screen` → `h-screen overflow-hidden`
 
-### AdminWorkspace.tsx
+Isso trava a altura do container no viewport.
 
-1. **Preservar ultimo room selecionado**: Criar um `lastEffectiveRoom` ref que guarda o ultimo `effectiveRoom` valido. Usar esse ref como fallback quando `effectiveRoom` e `null` durante refetches — assim o chat nunca desmonta durante carregamentos
+### 2. SidebarLayout.tsx (linha 180)
 
-2. **Proteger o useEffect de limpeza** (linha 240-249): Adicionar debounce ou verificar que o room realmente sumiu (nao e so um refetch temporario) — ex: so limpar apos 2 ciclos de render sem encontrar o room
+`<main className="flex-1 flex flex-col">` → `<main className="flex-1 flex flex-col min-h-0 overflow-hidden">`
 
-3. **Textarea**: Remover `resize-y` que pode causar colapso visual em alguns cenarios. Usar auto-resize via JS (ajustar `scrollHeight`) em vez de resize manual
+O `min-h-0` permite que o flex child encolha abaixo do conteudo natural. Sem isso, o `flex-1` nao respeita a altura do pai.
 
-## Arquivo
+### 3. SidebarLayout.tsx (linha 214)
+
+Confirmar que o container do workspace ja tem `overflow-hidden` (ja tem via condicional `isWorkspaceRoute`).
+
+### 4. AdminWorkspace.tsx (linha 773)
+
+`<div className="flex-1 overflow-auto">` → `<div className="flex-1 min-h-0 overflow-auto">`
+
+Mesmo principio: sem `min-h-0`, o flex item nao encolhe e empurra o ChatInput para fora.
+
+## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/pages/AdminWorkspace.tsx` | `lastEffectiveRoom` ref como fallback, debounce na limpeza |
-| `src/components/chat/ChatInput.tsx` | Remover `resize-y`, usar auto-resize por scrollHeight |
+| `src/components/SidebarLayout.tsx` | `h-screen overflow-hidden` + `min-h-0` no main |
+| `src/pages/AdminWorkspace.tsx` | `min-h-0` na div de mensagens |
 
