@@ -268,7 +268,12 @@ const WorkspaceDisplayTab = () => {
         )}
       </SectionCard>
 
-      {/* Timeline */}
+      {/* Fila de Atendimento */}
+      <SectionCard title="Fila de Atendimento" description="Controle a exibição de categoria, times e regras automáticas no painel.">
+        <ToggleRow id="ws-queue-info" label="Exibir Fila de Atendimento" checked={ws.ws_show_queue_info ?? true} onChange={(v) => update({ ws_show_queue_info: v })} />
+      </SectionCard>
+
+
       <SectionCard title="Timeline" description="Controle a exibição de eventos na timeline.">
         <ToggleRow id="ws-timeline" label="Exibir Timeline" checked={ws.ws_show_timeline} onChange={(v) => update({ ws_show_timeline: v })} />
         {ws.ws_show_timeline && (
