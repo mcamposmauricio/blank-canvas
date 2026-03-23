@@ -1,59 +1,50 @@
 
 
-# Plano: Widget Shell Instantaneo + Loading States
+# Plano: Exibir Fila/Categoria e Regras Automaticas no Side Panel do Workspace
 
-## Problema
+## O que sera adicionado
 
-Quando o usuario clica no FAB, o iframe e criado e carrega o React bundle + queries antes de renderizar qualquer coisa. O usuario ve uma janela vazia por 1-3 segundos ate o layout aparecer.
+Uma nova secao no `VisitorInfoPanel` (abaixo da secao Empresa) mostrando:
 
-## Solucao
+1. **Categoria/Fila** — nome e cor da categoria de atendimento atribuida a empresa (`contacts.service_category_id` → `chat_service_categories`)
+2. **Times vinculados** — quais times atendem essa categoria (`chat_category_teams` → `chat_teams`)
+3. **Regras de atribuicao** — resumo da config automatica (modelo, capacidade, online only) da `chat_assignment_configs` vinculada ao `chat_category_teams`
+4. **Regras automaticas** — regras ativas de auto-message/auto-close do tenant (`chat_auto_rules`) com tipo e tempo de trigger
 
-### 1. Skeleton shell inline no iframe (nps-chat-embed.js)
+Se a empresa nao tiver categoria atribuida, mostrar "Categoria padrao" (fallback do sistema).
 
-Ao criar o iframe em `createChatWidget()`, injetar via `srcdoc` um HTML minimo com o layout do widget (header colorido + body skeleton) que aparece **instantaneamente**, antes do React carregar. O iframe so troca para o `src` real apos o skeleton ser exibido.
+## Dados necessarios (queries adicionais no fetchData)
 
-**Alternativa mais simples:** Usar o proprio iframe com `src` mas adicionar um overlay skeleton no DOM do host page (fora do iframe) que cobre a area do widget e some quando o iframe envia `postMessage({ type: "chat-toggle" })`.
+Ao carregar o painel, apos ter o `company` (contact):
 
-**Abordagem escolhida:** Overlay no host page — mais simples, sem mexer no React.
+1. `chat_service_categories` — buscar pelo `service_category_id` da empresa (ou `is_default = true` como fallback)
+2. `chat_category_teams` + `chat_teams` — buscar times vinculados a essa categoria
+3. `chat_assignment_configs` — buscar config de atribuicao por `category_team_id`
+4. `chat_auto_rules` — buscar regras ativas do tenant (`is_enabled = true`)
 
-No `nps-chat-embed.js`, apos criar o iframe:
-- Criar um `div` overlay posicionado identico ao iframe (fixed, mesmo bottom/right, 420px width, mesma height)
-- Esse div contem: header com gradiente `primaryColor`, skeleton de linhas simulando form/history
-- Quando o iframe envia `chat-toggle` com `isOpen: true`, remover o overlay (React ja renderizou)
+Todas as queries em paralelo, adicionadas ao `Promise.all` existente.
 
-### 2. Loading states dentro do ChatWidget.tsx
+## Layout da nova secao
 
-Adicionar skeleton placeholders nos momentos de carregamento interno:
-- **History phase:** ja tem `Loader2` spinner — trocar por skeleton cards (3 cards placeholder)
-- **Init loading:** enquanto o `useEffect` init roda (busca settings, visitor, room), mostrar skeleton do body em vez de conteudo vazio
+```text
+── Fila de Atendimento ──────────────
+● Categoria: [badge colorido] Suporte Técnico
+  Times: Equipe Alpha, Equipe Beta
+  Atribuição: Round Robin · Online only · Cap. 3
+  
+── Regras Automáticas ───────────────
+⏱ Auto-mensagem após 5 min inativo
+⏱ Fechar sala após 30 min inativo
+```
+
+Secao colapsavel, visivel apenas quando ha empresa vinculada. Controlada por uma nova flag `ws_show_queue_info` no `WorkspaceDisplaySettings` (default `true`).
 
 ## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `public/nps-chat-embed.js` | Criar overlay skeleton no host page durante carregamento do iframe |
-| `src/pages/ChatWidget.tsx` | Skeleton placeholders para history loading e init loading |
+| `src/components/chat/VisitorInfoPanel.tsx` | Adicionar queries + secao visual |
+| `src/components/chat/WorkspaceDisplayTab.tsx` | Adicionar toggle `ws_show_queue_info` |
 
-## Detalhes tecnicos
-
-**Overlay skeleton (embed.js):**
-```text
-+---------------------------+
-| ████ Header (primaryColor)|
-|                           |
-| ░░░░░░░░░░░░░░ skeleton   |
-| ░░░░░░░░ skeleton          |
-| ░░░░░░░░░░░░ skeleton      |
-|                           |
-| ░░░░░░░░░░░░░░░ button    |
-+---------------------------+
-```
-
-O overlay e removido assim que o iframe posta a primeira mensagem `chat-toggle`.
-
-**History skeleton (ChatWidget.tsx):**
-Trocar o `<Loader2>` spinner por 3 cards skeleton com animacao pulse, mantendo o layout visual consistente.
-
-**Init skeleton:**
-Adicionar estado `initLoading` que e `true` ate o `useEffect` init terminar. Enquanto `true`, renderizar skeleton do body (header real + body skeleton).
+Sem migracoes SQL — todos os dados ja existem nas tabelas atuais. A nova flag `ws_show_queue_info` sera apenas client-side (default true) ate que se decida persistir.
 
