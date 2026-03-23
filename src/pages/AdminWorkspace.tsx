@@ -165,6 +165,7 @@ const AdminWorkspace = () => {
     setSelectedRoomId(null);
     setPendingSelectedRoom(null);
     setReplyTarget(null);
+    lastEffectiveRoomRef.current = null;
   }, [viewingAttendantId, viewingUnassigned]);
 
   useEffect(() => {
@@ -288,6 +289,8 @@ const AdminWorkspace = () => {
   const isPendingRoom = effectiveRoom?.status === "closed" && (effectiveRoom as any)?.resolution_status === "pending";
 
   const handleSelectPendingRoom = async (roomId: string) => {
+    lastEffectiveRoomRef.current = null;
+    setPendingSelectedRoom(null);
     setSelectedRoomId(roomId);
     setReplyTarget(null);
     // Fetch room data since it's not in the active rooms list
@@ -335,6 +338,8 @@ const AdminWorkspace = () => {
   };
 
   const handleSelectRoom = (id: string) => {
+    lastEffectiveRoomRef.current = null;
+    setPendingSelectedRoom(null);
     setSelectedRoomId(id);
     markRoomAsRead(id);
     setReplyTarget(null);
