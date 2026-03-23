@@ -593,6 +593,97 @@
     }
   }
 
+  // --- Skeleton overlay while iframe loads ---
+  var skeletonOverlay = null;
+
+  function showSkeletonOverlay() {
+    var maxH = Math.min(700, window.innerHeight - 16);
+    var overlay = document.createElement("div");
+    overlay.id = "nps-chat-skeleton";
+    overlay.style.cssText =
+      "position:fixed;bottom:0;" +
+      (position === "left" ? "left:0" : "right:0") +
+      ";width:420px;height:" + maxH + "px;z-index:1000;pointer-events:none;" +
+      "display:flex;flex-direction:column;padding:8px;box-sizing:border-box;";
+
+    var card = document.createElement("div");
+    card.style.cssText =
+      "flex:1;display:flex;flex-direction:column;background:#fff;border-radius:16px;" +
+      "box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);overflow:hidden;";
+
+    // Header
+    var header = document.createElement("div");
+    header.style.cssText =
+      "padding:16px;display:flex;align-items:center;gap:12px;border-radius:16px 16px 0 0;" +
+      "background:linear-gradient(135deg," + primaryColor + "," + primaryColor + ");";
+
+    var avatar = document.createElement("div");
+    avatar.style.cssText = "width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.15);flex-shrink:0;";
+    header.appendChild(avatar);
+
+    var headerText = document.createElement("div");
+    headerText.style.cssText = "flex:1;display:flex;flex-direction:column;gap:6px;";
+    var ht1 = document.createElement("div");
+    ht1.style.cssText = "width:100px;height:14px;background:rgba(255,255,255,0.3);border-radius:7px;";
+    var ht2 = document.createElement("div");
+    ht2.style.cssText = "width:160px;height:10px;background:rgba(255,255,255,0.15);border-radius:5px;";
+    headerText.appendChild(ht1);
+    headerText.appendChild(ht2);
+    header.appendChild(headerText);
+    card.appendChild(header);
+
+    // Body skeleton
+    var body = document.createElement("div");
+    body.style.cssText = "flex:1;padding:20px;display:flex;flex-direction:column;gap:16px;";
+
+    // Skeleton lines with pulse animation
+    var lines = [
+      { w: "70%", h: "12px" },
+      { w: "90%", h: "12px" },
+      { w: "50%", h: "12px" },
+      { w: "80%", h: "40px", r: "12px" },
+      { w: "60%", h: "12px" },
+      { w: "100%", h: "40px", r: "12px" },
+    ];
+    for (var i = 0; i < lines.length; i++) {
+      var line = document.createElement("div");
+      line.style.cssText =
+        "width:" + lines[i].w + ";height:" + lines[i].h + ";background:#f3f4f6;border-radius:" + (lines[i].r || "6px") + ";" +
+        "animation:nps-skeleton-pulse 1.5s ease-in-out infinite;";
+      line.style.animationDelay = (i * 0.1) + "s";
+      body.appendChild(line);
+    }
+    card.appendChild(body);
+
+    // Bottom bar skeleton
+    var bottomBar = document.createElement("div");
+    bottomBar.style.cssText = "padding:12px 16px;border-top:1px solid #f3f4f6;";
+    var inputSkel = document.createElement("div");
+    inputSkel.style.cssText = "width:100%;height:44px;background:#f3f4f6;border-radius:22px;animation:nps-skeleton-pulse 1.5s ease-in-out infinite;";
+    bottomBar.appendChild(inputSkel);
+    card.appendChild(bottomBar);
+
+    overlay.appendChild(card);
+
+    // Add keyframes if not already present
+    if (!document.getElementById("nps-skeleton-style")) {
+      var style = document.createElement("style");
+      style.id = "nps-skeleton-style";
+      style.textContent = "@keyframes nps-skeleton-pulse{0%,100%{opacity:1}50%{opacity:0.4}}";
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(overlay);
+    skeletonOverlay = overlay;
+  }
+
+  function removeSkeletonOverlay() {
+    if (skeletonOverlay) {
+      skeletonOverlay.remove();
+      skeletonOverlay = null;
+    }
+  }
+
   // --- Lazy iframe creation (only on first FAB click) ---
   function onFABClick() {
     hideFAB();
@@ -604,6 +695,9 @@
       }
       return;
     }
+
+    // Show skeleton overlay immediately while iframe loads
+    showSkeletonOverlay();
 
     // First click: resolve visitor then create iframe
     resolveVisitor(function () {
@@ -678,6 +772,9 @@
 
     window.addEventListener("message", function (event) {
       if (event.data && event.data.type === "chat-toggle") {
+        // Remove skeleton overlay as soon as iframe reports ready
+        removeSkeletonOverlay();
+
         widgetIsOpen = event.data.isOpen;
         if (event.data.isOpen) {
           iframe.style.width = "420px";

@@ -70,6 +70,7 @@ const ChatWidget = () => {
   const [formData, setFormData] = useState({ name: paramVisitorName || "", email: "", phone: "" });
   const [attendantName, setAttendantName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initLoading, setInitLoading] = useState(true);
   const [allBusy, setAllBusy] = useState(false);
   const [outsideHours, setOutsideHours] = useState(false);
   const [historyRooms, setHistoryRooms] = useState<HistoryRoom[]>([]);
@@ -281,100 +282,104 @@ const ChatWidget = () => {
 
   useEffect(() => {
     const init = async () => {
-      // Fetch widget display config if ownerUserId is available
-      const ownerForConfig = paramOwnerUserId;
-      if (ownerForConfig && ownerForConfig !== "00000000-0000-0000-0000-000000000000") {
-        const { data: cfg } = await supabase
-          .from("chat_settings")
-          .select("show_outside_hours_banner, outside_hours_title, outside_hours_message, show_all_busy_banner, all_busy_title, all_busy_message, waiting_message, show_email_field, show_phone_field, form_intro_text, show_chat_history, show_csat, allow_file_attachments, allow_multiple_chats")
-          .eq("user_id", ownerForConfig)
-          .maybeSingle();
-        if (cfg) setWidgetConfig(cfg as any);
-      }
-
-      if (paramVisitorToken) {
-        setVisitorToken(paramVisitorToken);
-        localStorage.setItem("chat_visitor_token", paramVisitorToken);
-
-        const { data: visitor } = await supabase
-          .from("chat_visitors")
-          .select("id")
-          .eq("visitor_token", paramVisitorToken)
-          .maybeSingle();
-
-        if (!visitor) return;
-        setVisitorId(visitor.id);
-
-        if (isResolvedVisitor) {
-          // Check for active/waiting room without fetching full history
-          const { data: activeRoom } = await supabase
-            .from("chat_rooms")
-            .select("id, status")
-            .eq("visitor_id", visitor.id)
-            .in("status", ["waiting", "active"])
+      try {
+        // Fetch widget display config if ownerUserId is available
+        const ownerForConfig = paramOwnerUserId;
+        if (ownerForConfig && ownerForConfig !== "00000000-0000-0000-0000-000000000000") {
+          const { data: cfg } = await supabase
+            .from("chat_settings")
+            .select("show_outside_hours_banner, outside_hours_title, outside_hours_message, show_all_busy_banner, all_busy_title, all_busy_message, waiting_message, show_email_field, show_phone_field, form_intro_text, show_chat_history, show_csat, allow_file_attachments, allow_multiple_chats")
+            .eq("user_id", ownerForConfig)
             .maybeSingle();
-
-          if (activeRoom) {
-            setRoomId(activeRoom.id);
-            setPhase(activeRoom.status === "active" ? "chat" : "waiting");
-          } else {
-            setPhase("history");
-          }
-        } else {
-          const { data: room } = await supabase
-            .from("chat_rooms")
-            .select("id, status, attendant_id")
-            .eq("visitor_id", visitor.id)
-            .in("status", ["waiting", "active"])
-            .maybeSingle();
-
-          if (room) {
-            setRoomId(room.id);
-            setPhase(room.status === "active" ? "chat" : "waiting");
-            if (room.status === "active" && room.attendant_id) {
-              await checkRoomAssignment(room.id);
-            }
-          }
+          if (cfg) setWidgetConfig(cfg as any);
         }
-        return;
-      }
 
-      const savedToken = localStorage.getItem("chat_visitor_token");
-      if (savedToken) {
-        setVisitorToken(savedToken);
-        const { data: visitor } = await supabase
-          .from("chat_visitors")
-          .select("id")
-          .eq("visitor_token", savedToken)
-          .maybeSingle();
+        if (paramVisitorToken) {
+          setVisitorToken(paramVisitorToken);
+          localStorage.setItem("chat_visitor_token", paramVisitorToken);
 
-        if (visitor) {
+          const { data: visitor } = await supabase
+            .from("chat_visitors")
+            .select("id")
+            .eq("visitor_token", paramVisitorToken)
+            .maybeSingle();
+
+          if (!visitor) return;
           setVisitorId(visitor.id);
-          const { data: room } = await supabase
-            .from("chat_rooms")
-            .select("id, status, attendant_id")
-            .eq("visitor_id", visitor.id)
-            .in("status", ["waiting", "active"])
+
+          if (isResolvedVisitor) {
+            // Check for active/waiting room without fetching full history
+            const { data: activeRoom } = await supabase
+              .from("chat_rooms")
+              .select("id, status")
+              .eq("visitor_id", visitor.id)
+              .in("status", ["waiting", "active"])
+              .maybeSingle();
+
+            if (activeRoom) {
+              setRoomId(activeRoom.id);
+              setPhase(activeRoom.status === "active" ? "chat" : "waiting");
+            } else {
+              setPhase("history");
+            }
+          } else {
+            const { data: room } = await supabase
+              .from("chat_rooms")
+              .select("id, status, attendant_id")
+              .eq("visitor_id", visitor.id)
+              .in("status", ["waiting", "active"])
+              .maybeSingle();
+
+            if (room) {
+              setRoomId(room.id);
+              setPhase(room.status === "active" ? "chat" : "waiting");
+              if (room.status === "active" && room.attendant_id) {
+                await checkRoomAssignment(room.id);
+              }
+            }
+          }
+          return;
+        }
+
+        const savedToken = localStorage.getItem("chat_visitor_token");
+        if (savedToken) {
+          setVisitorToken(savedToken);
+          const { data: visitor } = await supabase
+            .from("chat_visitors")
+            .select("id")
+            .eq("visitor_token", savedToken)
             .maybeSingle();
 
-          if (room) {
-            setRoomId(room.id);
-            if (room.status === "active") {
-              setPhase("chat");
-              if (room.attendant_id) {
-                const { data: att } = await supabase
-                  .from("attendant_profiles")
-                  .select("display_name")
-                  .eq("id", room.attendant_id)
-                  .maybeSingle();
-                setAttendantName(att?.display_name || "Atendente");
-                setAttendantName(att?.display_name ?? null);
+          if (visitor) {
+            setVisitorId(visitor.id);
+            const { data: room } = await supabase
+              .from("chat_rooms")
+              .select("id, status, attendant_id")
+              .eq("visitor_id", visitor.id)
+              .in("status", ["waiting", "active"])
+              .maybeSingle();
+
+            if (room) {
+              setRoomId(room.id);
+              if (room.status === "active") {
+                setPhase("chat");
+                if (room.attendant_id) {
+                  const { data: att } = await supabase
+                    .from("attendant_profiles")
+                    .select("display_name")
+                    .eq("id", room.attendant_id)
+                    .maybeSingle();
+                  setAttendantName(att?.display_name || "Atendente");
+                  setAttendantName(att?.display_name ?? null);
+                }
+              } else {
+                setPhase("waiting");
               }
-            } else {
-              setPhase("waiting");
             }
           }
         }
+      } finally {
+        setInitLoading(false);
       }
     };
     init();
@@ -1314,8 +1319,25 @@ const ChatWidget = () => {
       {/* Body */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-background">
 
+        {/* ===== INIT LOADING SKELETON ===== */}
+        {initLoading && (
+          <div className="flex-1 p-5 space-y-5 animate-pulse">
+            <div className="space-y-3">
+              <div className="h-3 w-2/3 bg-muted rounded" />
+              <div className="h-3 w-full bg-muted/70 rounded" />
+              <div className="h-3 w-1/2 bg-muted/50 rounded" />
+            </div>
+            <div className="h-10 w-full bg-muted rounded-xl" />
+            <div className="space-y-3">
+              <div className="h-3 w-3/4 bg-muted/70 rounded" />
+              <div className="h-10 w-full bg-muted rounded-xl" />
+            </div>
+            <div className="h-11 w-full bg-muted rounded-xl mt-auto" />
+          </div>
+        )}
+
         {/* ===== FORM PHASE ===== */}
-        {phase === "form" && (
+        {!initLoading && phase === "form" && (
           <div className="flex-1 overflow-y-auto p-5 relative">
             {/* Decorative background icon */}
             <div className="absolute top-4 right-4 opacity-[0.04] pointer-events-none">
@@ -1365,7 +1387,7 @@ const ChatWidget = () => {
         )}
 
         {/* ===== HISTORY PHASE ===== */}
-        {phase === "history" && (widgetConfig?.show_chat_history ?? true) && (
+        {!initLoading && phase === "history" && (widgetConfig?.show_chat_history ?? true) && (
           <div className="flex-1 overflow-y-auto p-4 min-h-0">
             <div className="space-y-3">
               <button
@@ -1379,8 +1401,22 @@ const ChatWidget = () => {
               </button>
 
               {historyLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="rounded-xl border border-border/60 overflow-hidden animate-pulse">
+                      <div className="flex">
+                        <div className="w-1 shrink-0 rounded-l-xl bg-muted" />
+                        <div className="flex-1 p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-3.5 w-3.5 rounded-full bg-muted" />
+                            <div className="h-3 w-20 bg-muted rounded" />
+                          </div>
+                          <div className="h-3 w-3/4 bg-muted/70 rounded" />
+                          <div className="h-2.5 w-1/2 bg-muted/50 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : historyRooms.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">Nenhuma conversa anterior.</p>
@@ -1480,7 +1516,7 @@ const ChatWidget = () => {
           </div>
         )}
 
-        {phase === "history" && !(widgetConfig?.show_chat_history ?? true) && (
+        {!initLoading && phase === "history" && !(widgetConfig?.show_chat_history ?? true) && (
           <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
             <button
               className="w-full h-10 rounded-full text-sm font-medium text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
@@ -1495,7 +1531,7 @@ const ChatWidget = () => {
         )}
 
         {/* ===== WAITING PHASE ===== */}
-        {phase === "waiting" && (
+        {!initLoading && phase === "waiting" && (
           <div className="flex-1 flex flex-col min-h-0">
             {/* Indeterminate progress bar */}
             <div className="h-0.5 w-full bg-muted overflow-hidden">
@@ -1580,7 +1616,7 @@ const ChatWidget = () => {
         )}
 
         {/* ===== CHAT / TRANSCRIPT MESSAGES ===== */}
-        {(phase === "chat" || phase === "csat" || phase === "closed" || phase === "viewTranscript") && (
+        {!initLoading && (phase === "chat" || phase === "csat" || phase === "closed" || phase === "viewTranscript") && (
           <div className="flex-1 overflow-y-auto p-4 min-h-0" ref={scrollRef}>
             {hasMoreMessages && (
               <button
