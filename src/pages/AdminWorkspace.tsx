@@ -237,17 +237,25 @@ const AdminWorkspace = () => {
     company_contact_id: string | null; started_at: string | null;
   } | null>(null);
 
-  // Clear selectedRoomId if no longer in filteredRooms (and not a pending room)
-  // Never clear if it matches paramRoomId (user navigated intentionally via link)
+  // Clear selectedRoomId if no longer in filteredRooms (debounced to avoid flicker during refetches)
   useEffect(() => {
     if (!selectedRoomId) return;
     if (pendingSelectedRoom) return;
     if (paramRoomId && selectedRoomId === paramRoomId) return;
     const found = filteredRooms.some((r) => r.id === selectedRoomId);
     if (!found && !roomsLoading) {
-      setSelectedRoomId(null);
-      setReplyTarget(null);
+      if (cleanupTimerRef.current) clearTimeout(cleanupTimerRef.current);
+      cleanupTimerRef.current = setTimeout(() => {
+        setSelectedRoomId(null);
+        setReplyTarget(null);
+      }, 500);
+    } else {
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current);
+        cleanupTimerRef.current = null;
+      }
     }
+    return () => { if (cleanupTimerRef.current) clearTimeout(cleanupTimerRef.current); };
   }, [filteredRooms, selectedRoomId, roomsLoading, pendingSelectedRoom, paramRoomId]);
 
   // If paramRoomId is set but room is not in rooms list, fetch it directly
