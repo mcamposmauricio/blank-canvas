@@ -1,89 +1,82 @@
 
 
-# Plano: Otimizar Carregamento do Widget de Chat
+# Plano: Otimizacao Completa de Performance do Sistema
 
-## Problema Atual
+O plano anterior (widget) foi implementado. Este plano cobre as otimizacoes do painel admin/operador que foram identificadas mas nao executadas.
 
-Quando o embed `nps-chat-embed.js` carrega em uma pagina do cliente, **antes mesmo do usuario clicar no FAB**, as seguintes requests sao disparadas:
+## 1. Polling do SidebarDataContext: 30s → 5min
 
-### No script embed (nps-chat-embed.js)
-| # | Request | Quando |
-|---|---|---|
-| 1 | `get-widget-config` (edge function) | Imediato no page load |
-| 2 | `resolve-chat-visitor` (edge function) | Imediato no page load |
-| 3 | `get-visitor-banners` (edge function) | Imediato no page load |
+**Arquivo:** `src/contexts/SidebarDataContext.tsx` linha 286
 
-### No iframe ChatWidget.tsx (carregado automaticamente)
-| # | Request | Quando |
-|---|---|---|
-| 4 | `chat_settings` SELECT | Iframe mount |
-| 5 | `chat_visitors` SELECT | Iframe mount |
-| 6 | `chat_rooms` SELECT (active room check) | Iframe mount |
-| 7 | `chat_rooms` SELECT (history) | Se phase = history |
-| 8 | `attendant_profiles` SELECT | Se tem rooms no history |
-| 9 | `chat_messages` SELECT (last msgs) | Para cada room no history |
-| 10 | Realtime channel subscription | Iframe mount |
+Hoje: `setInterval(resyncCounts, 30_000)` — ~120 queries/hora por usuario.
+O Realtime com debounce de 1s ja cobre mudancas em tempo real. O intervalo serve apenas como safety net.
 
-**Total: 7-10 requests no carregamento da pagina, antes de qualquer clique.**
+**Mudanca:** Alterar para `300_000` (5 minutos). Economia: ~108 queries/hora por usuario.
 
-## Solucao Proposta
+## 2. Mover `process-chat-auto-rules` para cron job
 
-### Fase 1: Lazy iframe — so carregar o iframe ao clicar no FAB
+**Arquivo:** `src/components/SidebarLayout.tsx` linhas 126-150
 
-Hoje o embed cria o iframe imediatamente. O iframe carrega `/widget` que e uma pagina React completa — JS bundle, queries, realtime.
+Hoje: cada usuario logado chama a edge function a cada 5 min. Com 6 usuarios = 72 chamadas/hora ao edge function, que por sua vez faz queries no banco.
 
-**Mudanca:** O `nps-chat-embed.js` deve:
-1. No page load: executar apenas `get-widget-config` (necessario para cores/nome do FAB) e `get-visitor-banners` (banners sao independentes do chat)
-2. O `resolve-chat-visitor` pode ser adiado — so precisa rodar se o usuario abrir o chat
-3. **Nao criar o iframe** ate o primeiro clique no FAB
-4. Renderizar o FAB (botao flutuante) diretamente no DOM via JS puro (ja renderiza parcialmente, mas o iframe e criado junto)
-5. Ao clicar no FAB pela primeira vez: criar iframe, resolver visitor, carregar chat
+**Mudanca:**
+- Criar migracao SQL com `cron.schedule` para chamar `process-chat-auto-rules` a cada 5 min (1 chamada global, nao por usuario)
+- Remover o `useEffect` de polling do `SidebarLayout.tsx`
 
-**Economia no page load:** De ~7-10 requests para **1-2 requests** (apenas `get-widget-config` + `get-visitor-banners`). O `resolve-chat-visitor` e todas as queries do iframe so acontecem quando o usuario interage.
+## 3. Otimizar `fetchRooms` no `useChatRealtime.ts`
 
-### Fase 2: Lazy history no ChatWidget.tsx
+**Arquivo:** `src/hooks/useChatRealtime.ts` linhas 222-274
 
-O ChatWidget.tsx ja tem logica de lazy history (so busca quando `phase === "history"` e widget `isOpen`), mas pode melhorar:
+Hoje faz 3 queries separadas apos buscar rooms:
+1. `chat_messages` SELECT para last message (retorna TODAS as mensagens de todos os rooms, filtra no client)
+2. `chat_room_reads` SELECT
+3. `chat_messages` SELECT novamente para unreads
 
-1. **Historico ja e paginado** (HISTORY_PAGE_SIZE = 10) — ok
-2. **Mensagens ja sao paginadas** (PAGE_SIZE = 10) — ok
-3. **Last messages do historico**: hoje busca TODAS as mensagens de todos os rooms do history e filtra no client (linhas 248-264). Mudar para buscar apenas os rooms visiveis, com `LIMIT 1` por room via database function
-4. **Realtime subscription**: so criar channel apos ter um `roomId` ativo (ja faz isso — ok)
+**Mudanca:**
+- Query 1: usar a funcao `get_last_messages_for_rooms` (ja criada na migracao anterior) via RPC em vez de buscar todas as mensagens
+- Queries 2+3 permanecem (sao necessarias para unread count preciso)
 
-### Fase 3: Otimizar o FAB com unread badge
+Economia: de centenas/milhares de rows retornadas para exatamente 1 row por room.
 
-Hoje o unread count so funciona quando o iframe ja existe (mensagem postMessage). Com lazy iframe:
-1. Na resolucao do visitor (que agora acontece no clique), se houver room ativo, retornar `unread_count` no response
-2. Mostrar badge de unread no FAB puro (sem iframe)
-3. Alternativa mais simples: ao detectar `has_history = true` do resolve (que roda no primeiro clique), mostrar um dot generico
+## 4. Otimizar `useDashboardStats` — batches de first response
 
-### Fase 4: Cache do widget config
+**Arquivo:** `src/hooks/useDashboardStats.ts` linhas 282-320
 
-O `get-widget-config` retorna dados que raramente mudam (cores, nome). Cachear em `localStorage` com TTL de 1h para eliminar ate essa request em visitas subsequentes.
+Hoje: busca TODAS as mensagens de atendente em batches de 50 rooms para calcular first response time. Com 200 rooms = 4 queries retornando potencialmente milhares de rows.
+
+**Mudanca:** Criar database function `get_first_response_times(p_room_ids uuid[])` que usa `DISTINCT ON (room_id)` com `ORDER BY created_at ASC` para retornar apenas 1 mensagem por room. Substituir os batches por 1 chamada RPC.
+
+## 5. Consolidar queries do SidebarDataContext
+
+**Arquivo:** `src/contexts/SidebarDataContext.tsx` linhas 35-100
+
+Hoje faz ate 6 queries sequenciais:
+1. `attendant_profiles` (my profile)
+2. `attendant_profiles` (all tenant)
+3. `chat_team_members` (my teams)
+4. `chat_team_members` (team members)
+5. `attendant_profiles` (again, for "other" teams — redundante)
+
+**Mudanca:** Buscar `attendant_profiles` do tenant 1 vez. Buscar `chat_team_members` do tenant 1 vez. Filtrar no client. De 5 queries → 2 queries.
 
 ## Resumo de Impacto
 
-| Metrica | Antes | Depois |
-|---|---|---|
-| Requests no page load | 7-10 | 1-2 |
-| Iframe carregado | Sempre | So no clique |
-| JS bundle do React carregado | Sempre | So no clique |
-| Realtime channels | Sempre | So com room ativo |
-| History queries | Na abertura | Na abertura (mantido, ja e lazy) |
+| Melhoria | Antes | Depois | Complexidade |
+|---|---|---|---|
+| Resync interval | 120 queries/h/user | 12 queries/h/user | 1 linha |
+| Auto-rules cron | 72 calls/h (6 users) | 12 calls/h (global) | Migration + remover useEffect |
+| fetchRooms last msg | Todas as msgs retornadas | 1 msg/room via RPC | 1 chamada RPC |
+| Dashboard first response | 4 batches, milhares rows | 1 RPC, 1 row/room | Nova DB function |
+| Sidebar queries | 5 queries sequenciais | 2 queries | Refactor JS |
 
 ## Arquivos
 
-| Arquivo | Mudanca |
+| Tipo | Arquivo |
 |---|---|
-| `public/nps-chat-embed.js` | FAB puro em JS, lazy iframe, defer resolve-visitor, cache widget-config |
-| `src/pages/ChatWidget.tsx` | Otimizar query de last_message no history (database function ou limit) |
-
-## Paginacao adicional
-
-Itens que ja estao paginados e nao precisam de mudanca:
-- History rooms: paginado com `HISTORY_PAGE_SIZE = 10`
-- Mensagens do chat: paginado com `PAGE_SIZE = 10` + scroll-to-load-more
-
-Itens a paginar/otimizar:
-- Last messages do history: hoje faz `SELECT * FROM chat_messages WHERE room_id IN (...)` sem limit por room — pode retornar centenas de registros. Solucao: usar `DISTINCT ON (room_id)` via database function ou view
+| Editar | `src/contexts/SidebarDataContext.tsx` — intervalo 30s→300s + consolidar queries |
+| Editar | `src/components/SidebarLayout.tsx` — remover useEffect de polling |
+| Editar | `src/hooks/useChatRealtime.ts` — usar RPC `get_last_messages_for_rooms` |
+| Editar | `src/hooks/useDashboardStats.ts` — usar nova RPC para first response |
+| Migration | Cron job `process-chat-auto-rules` a cada 5 min |
+| Migration | Nova function `get_first_response_times(p_room_ids uuid[])` |
 
