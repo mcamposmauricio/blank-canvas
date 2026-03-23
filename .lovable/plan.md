@@ -1,35 +1,26 @@
 
 
-# Plano: Converter Tags e Macros de Grid para Listagem
+# Plano: Corrigir link de conversa redirecionando para workspace vazio
 
-## Problema
+## Causa raiz
 
-O grid de cards com 24 tags/pagina e 12 macros/pagina renderiza muitos DOM nodes por item (badge, color dot, hover buttons, etc), tornando a tela lenta. Alem disso, o `TagManagementSection` busca TODOS os `chat_room_tags` para contar uso — query pesada.
+Quando o usuario acessa `/admin/chat/:roomId`, o `ChatRouteRedirect` redireciona para `/admin/workspace/:roomId`. O workspace seta `selectedRoomId = paramRoomId`.
 
-## Mudancas
+Porem, o `useEffect` nas linhas 234-243 do `AdminWorkspace.tsx` limpa o `selectedRoomId` se o room nao estiver em `filteredRooms`. O `filteredRooms` filtra apenas rooms do atendente atual (linha 221-225). Se o room pertence a outro atendente (ou esta sem atendente), ele e removido da selecao — e o usuario ve o workspace vazio.
 
-### 1. TagManagementSection.tsx — Listagem compacta
+## Correcao
 
-Trocar o grid de cards por uma **tabela/lista compacta**:
-- Cada linha: cor (dot) | nome | uso count | data | botoes edit/delete
-- Manter busca e paginacao (24/page)
-- **Remover query de `chat_room_tags`** (usage count) — essa query puxa TODOS os registros da tabela so para contar. Mostrar uso apenas sob demanda (ao abrir dialog de delete)
-- Loading state: retornar skeleton rows em vez de `null`
+### AdminWorkspace.tsx — Preservar `paramRoomId`
 
-### 2. Macros no AdminSettings.tsx — Listagem compacta
+1. No `useEffect` de limpeza (linha 234-243): se `paramRoomId` estiver definido e for igual ao `selectedRoomId`, **nao limpar** — o usuario navegou intencionalmente para essa conversa
 
-Trocar o grid de cards por lista:
-- Cada linha: titulo | badge publica/particular | shortcut | conteudo truncado | botoes
-- Manter busca e paginacao (12/page)
+2. No `filteredRooms` (linha 217-225): se `paramRoomId` estiver definido, incluir sempre o room com esse ID no filtro (alem dos filtros normais), para que ele apareca na lista lateral
 
-### 3. Performance: lazy usage count nas tags
+3. Se o room do `paramRoomId` nao estiver na lista `rooms` (pertence a outro atendente e o `useChatRooms` nao o retorna por filtro de status), fazer um fetch direto desse room especifico no mount e adicionar ao estado
 
-Em vez de buscar `chat_room_tags` no carregamento inicial, buscar o usage_count apenas quando o usuario clica em deletar uma tag (no `setDeleteTag`). Isso elimina a query mais pesada do carregamento.
-
-## Arquivos
+## Arquivo
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/chat/TagManagementSection.tsx` | Lista compacta, remover usage query do init, lazy usage no delete |
-| `src/pages/AdminSettings.tsx` | Macros em lista compacta |
+| `src/pages/AdminWorkspace.tsx` | Preservar paramRoomId no filtro e na limpeza, fetch direto se necessario |
 
