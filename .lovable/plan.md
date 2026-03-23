@@ -1,39 +1,37 @@
 
 
-# Plano: Fixar Workspace na viewport — aplicar mudancas pendentes
+# Plano: Limpar dados ao trocar de room + preservar drafts
 
-## Problema
+## Problemas
 
-O plano anterior (trocar `min-h-screen` por `h-screen`) foi aprovado mas nao foi implementado. O layout ainda permite crescimento vertical alem da tela, empurrando o ChatInput para fora.
+1. **Side panel e mensagens mostram dados do room anterior** — O `lastEffectiveRoomRef` mantem o room antigo como fallback durante transicoes. Quando o usuario clica em outro room ou troca filtro de atendente, o ref continua exibindo o room anterior ate o novo carregar.
+
+2. **Drafts** — Ja implementado via `draftsMap` no `ChatInput.tsx` (linha 17). O sistema ja persiste e restaura rascunhos por room. Nenhuma mudanca necessaria.
+
+## Causa raiz
+
+Linha 285-287 do `AdminWorkspace.tsx`:
+```
+const rawEffectiveRoom = selectedRoom ?? pendingSelectedRoom;
+if (rawEffectiveRoom) lastEffectiveRoomRef.current = rawEffectiveRoom;
+const effectiveRoom = rawEffectiveRoom ?? lastEffectiveRoomRef.current;
+```
+
+O ref so e util para evitar flicker durante refetches do realtime (quando o mesmo room desaparece e reaparece). Mas quando o usuario **intencionalmente** troca de room, o ref deveria ser limpo.
 
 ## Mudancas
 
-### 1. SidebarLayout.tsx (linha 178)
+### AdminWorkspace.tsx
 
-`min-h-screen` → `h-screen overflow-hidden`
+1. **Limpar `lastEffectiveRoomRef` ao trocar de room**: No `handleSelectRoom` e `handleSelectPendingRoom`, fazer `lastEffectiveRoomRef.current = null` antes de setar o novo `selectedRoomId`. Isso garante que o panel/mensagens nao mostrem dados do room anterior.
 
-Isso trava a altura do container no viewport.
+2. **Limpar ao trocar filtro de atendente**: Quando o usuario troca o filtro de atendente (`selectedAttendantId`), limpar `selectedRoomId` e `lastEffectiveRoomRef` para que o painel fique vazio ate selecionar um novo room.
 
-### 2. SidebarLayout.tsx (linha 180)
+3. **Limpar `pendingSelectedRoom`** nos mesmos pontos para evitar conflitos.
 
-`<main className="flex-1 flex flex-col">` → `<main className="flex-1 flex flex-col min-h-0 overflow-hidden">`
-
-O `min-h-0` permite que o flex child encolha abaixo do conteudo natural. Sem isso, o `flex-1` nao respeita a altura do pai.
-
-### 3. SidebarLayout.tsx (linha 214)
-
-Confirmar que o container do workspace ja tem `overflow-hidden` (ja tem via condicional `isWorkspaceRoute`).
-
-### 4. AdminWorkspace.tsx (linha 773)
-
-`<div className="flex-1 overflow-auto">` → `<div className="flex-1 min-h-0 overflow-auto">`
-
-Mesmo principio: sem `min-h-0`, o flex item nao encolhe e empurra o ChatInput para fora.
-
-## Arquivos
+## Arquivo
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/SidebarLayout.tsx` | `h-screen overflow-hidden` + `min-h-0` no main |
-| `src/pages/AdminWorkspace.tsx` | `min-h-0` na div de mensagens |
+| `src/pages/AdminWorkspace.tsx` | Limpar ref e pendingSelectedRoom ao trocar room/atendente |
 
