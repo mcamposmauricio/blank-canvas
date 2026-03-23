@@ -393,17 +393,9 @@ export function ChatInput({ onSend, roomId, senderName }: ChatInputProps) {
     }
   };
 
-  const autoResize = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 200) + "px";
-  }, []);
-
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const v = e.target.value;
     setValue(v);
-    autoResize();
     // Persist draft immediately on every keystroke
     if (roomId) persistDraft(roomId, v);
 
