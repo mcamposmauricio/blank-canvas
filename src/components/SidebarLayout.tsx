@@ -211,7 +211,7 @@ export default function SidebarLayout() {
               </div>
             )}
 
-            <div className={`flex-1 overflow-auto bg-background ${isWorkspaceRoute ? 'p-0' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+            <div className={`flex-1 bg-background ${isWorkspaceRoute ? 'p-0 overflow-hidden' : 'overflow-auto p-3 sm:p-4 md:p-6 lg:p-8'}`}>
               <Outlet />
             </div>
           </main>
