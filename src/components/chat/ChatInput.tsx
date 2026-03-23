@@ -599,7 +599,7 @@ export function ChatInput({ onSend, roomId, senderName }: ChatInputProps) {
         </div>
       )}
 
-      <div className="flex gap-2 items-end">
+      <div className="flex gap-2 items-end flex-wrap min-w-0">
         <Button
           size="icon"
           variant="ghost"
