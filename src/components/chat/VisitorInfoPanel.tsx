@@ -318,7 +318,7 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
         (async () => {
           const { data } = await supabase
             .from("contacts")
-            .select("id, name, trade_name, health_score, mrr, contract_value, renewal_date, last_nps_score, last_nps_date, city, state, company_sector, company_document, custom_fields, external_id")
+            .select("id, name, trade_name, health_score, mrr, contract_value, renewal_date, last_nps_score, last_nps_date, city, state, company_sector, company_document, custom_fields, external_id, service_category_id")
             .eq("id", resolvedContactId)
             .maybeSingle();
           setCompany(data as Company | null);
