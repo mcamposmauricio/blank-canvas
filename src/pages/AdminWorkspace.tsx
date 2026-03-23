@@ -789,7 +789,7 @@ const AdminWorkspace = () => {
           )}
           </ResizablePanelGroup>
         </div>
-
+      </div>
       <CloseRoomDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} onConfirm={handleConfirmClose} roomId={closingRoomId} />
       <ReassignDialog open={reassignOpen} onOpenChange={setReassignOpen} currentAttendantId={effectiveRoom?.attendant_id ?? null} onConfirm={handleReassign} />
       {userAttendantId && (
