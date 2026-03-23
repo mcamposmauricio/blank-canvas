@@ -1516,7 +1516,7 @@ const ChatWidget = () => {
           </div>
         )}
 
-        {phase === "history" && !(widgetConfig?.show_chat_history ?? true) && (
+        {!initLoading && phase === "history" && !(widgetConfig?.show_chat_history ?? true) && (
           <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
             <button
               className="w-full h-10 rounded-full text-sm font-medium text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
