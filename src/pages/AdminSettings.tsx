@@ -850,76 +850,128 @@ const AdminSettings = () => {
             {/* Macros */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
                     <CardTitle className="text-base">{t("chat.settings.macros.title")}</CardTitle>
                     <CardDescription>{t("chat.settings.macros.description")}</CardDescription>
                   </div>
-                  <Button size="sm" onClick={() => openMacroDialog()}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    {t("chat.settings.macros.new")}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {macros.filter((m) => {
+                        if (!macroSearch) return true;
+                        const q = macroSearch.toLowerCase();
+                        return m.title.toLowerCase().includes(q) || m.content.toLowerCase().includes(q) || (m.shortcut?.toLowerCase().includes(q)) || (m.category?.toLowerCase().includes(q));
+                      }).length} macros
+                    </span>
+                    <Button size="sm" onClick={() => openMacroDialog()}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      {t("chat.settings.macros.new")}
+                    </Button>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
                 {macros.length > 0 && (
-                  <div className="mb-4">
+                  <div className="relative mt-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Buscar macros..."
                       value={macroSearch}
-                      onChange={(e) => setMacroSearch(e.target.value)}
-                      className="max-w-xs"
+                      onChange={(e) => { setMacroSearch(e.target.value); setMacroPage(1); }}
+                      className="pl-9 max-w-xs"
                     />
                   </div>
                 )}
+              </CardHeader>
+              <CardContent>
                 {macros.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">{t("chat.gerencial.no_data")}</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("chat.settings.macros.title_label")}</TableHead>
-                        <TableHead>Conteúdo</TableHead>
-                        <TableHead>{t("chat.settings.macros.shortcut")}</TableHead>
-                        <TableHead>{t("chat.settings.macros.category")}</TableHead>
-                        <TableHead className="w-[100px]" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {macros
-                        .filter((m) => {
-                          if (!macroSearch) return true;
-                          const q = macroSearch.toLowerCase();
-                          return m.title.toLowerCase().includes(q) || m.content.toLowerCase().includes(q) || (m.shortcut?.toLowerCase().includes(q)) || (m.category?.toLowerCase().includes(q));
-                        })
-                        .map((m) => (
-                        <TableRow key={m.id}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {m.title}
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${m.is_private ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"}`}>
-                                {m.is_private ? "Particular" : "Pública"}
-                              </span>
+                ) : (() => {
+                  const filteredMacros = macros.filter((m) => {
+                    if (!macroSearch) return true;
+                    const q = macroSearch.toLowerCase();
+                    return m.title.toLowerCase().includes(q) || m.content.toLowerCase().includes(q) || (m.shortcut?.toLowerCase().includes(q)) || (m.category?.toLowerCase().includes(q));
+                  });
+                  const macroTotalPages = Math.max(1, Math.ceil(filteredMacros.length / MACROS_PER_PAGE));
+                  const macroCurrentPage = Math.min(macroPage, macroTotalPages);
+                  const paginatedMacros = filteredMacros.slice((macroCurrentPage - 1) * MACROS_PER_PAGE, macroCurrentPage * MACROS_PER_PAGE);
+
+                  return filteredMacros.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">Nenhuma macro encontrada</p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {paginatedMacros.map((m) => (
+                          <div
+                            key={m.id}
+                            className="group relative rounded-lg border border-border/50 bg-secondary/30 p-4 transition-colors hover:bg-secondary/60"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium text-sm truncate">{m.title}</span>
+                                  <Badge variant={m.is_private ? "secondary" : "default"} className="text-[10px] px-1.5 py-0">
+                                    {m.is_private ? "Particular" : "Pública"}
+                                  </Badge>
+                                </div>
+                                {m.shortcut && (
+                                  <span className="text-xs font-mono text-muted-foreground mt-1 block">/{m.shortcut}</span>
+                                )}
+                                {m.category && (
+                                  <span className="text-[11px] text-muted-foreground">{m.category}</span>
+                                )}
+                              </div>
+                              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openMacroDialog(m)}>
+                                  <Edit className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteMacro(m.id)}>
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
                             </div>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{m.content.slice(0, 80)}</TableCell>
-                          <TableCell className="font-mono text-sm">{m.shortcut ?? "—"}</TableCell>
-                          <TableCell>{m.category ?? "—"}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openMacroDialog(m)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteMacro(m.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
+                            <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{m.content}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {macroTotalPages > 1 && (
+                        <div className="mt-4">
+                          <Pagination>
+                            <PaginationContent>
+                              <PaginationItem>
+                                <PaginationPrevious
+                                  onClick={() => setMacroPage((p) => Math.max(1, p - 1))}
+                                  className={macroCurrentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                              </PaginationItem>
+                              {Array.from({ length: macroTotalPages }, (_, i) => i + 1)
+                                .filter((p) => p === 1 || p === macroTotalPages || Math.abs(p - macroCurrentPage) <= 1)
+                                .map((p, idx, arr) => (
+                                  <PaginationItem key={p}>
+                                    {idx > 0 && arr[idx - 1] !== p - 1 && (
+                                      <span className="px-2 text-muted-foreground">…</span>
+                                    )}
+                                    <PaginationLink
+                                      isActive={p === macroCurrentPage}
+                                      onClick={() => setMacroPage(p)}
+                                      className="cursor-pointer"
+                                    >
+                                      {p}
+                                    </PaginationLink>
+                                  </PaginationItem>
+                                ))}
+                              <PaginationItem>
+                                <PaginationNext
+                                  onClick={() => setMacroPage((p) => Math.min(macroTotalPages, p + 1))}
+                                  className={macroCurrentPage === macroTotalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                              </PaginationItem>
+                            </PaginationContent>
+                          </Pagination>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
