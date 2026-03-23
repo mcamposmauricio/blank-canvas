@@ -605,7 +605,7 @@ const AdminWorkspace = () => {
   // Desktop layout with resizable panels
   return (
     <>
-      <div className="h-screen flex flex-col bg-transparent overflow-hidden overflow-x-hidden w-full">
+      <div className="h-full flex flex-col bg-transparent overflow-hidden w-full max-w-full">
         <div className="flex-1 flex min-h-0">
           {/* Left: Room list — fixed width */}
           <div className={`h-full flex flex-col border-r shrink-0 ${isCompact ? 'w-[200px]' : 'w-[280px]'}`}>
