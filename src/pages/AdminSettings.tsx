@@ -114,6 +114,7 @@ const AdminSettings = () => {
   const [macroDialog, setMacroDialog] = useState(false);
   const [editingMacro, setEditingMacro] = useState<Macro | null>(null);
   const [macroForm, setMacroForm] = useState({ title: "", content: "", shortcut: "", category: "", is_private: false });
+  const [macroPage, setMacroPage] = useState(1);
 
   // Business Hours
   const [hours, setHours] = useState<BusinessHour[]>([]);
