@@ -111,7 +111,7 @@ function RoomItem({ room, selectedRoomId, onSelectRoom }: { room: ChatRoom; sele
       {room.last_message && (
         <p className={`text-xs text-muted-foreground truncate ${unread > 0 ? "font-medium text-foreground" : ""}`}>
           {room.last_message_sender_type && room.last_message_sender_type !== "visitor" ? "Você: " : ""}
-          {room.last_message.slice(0, 60)}{room.last_message.length > 60 ? "..." : ""}
+          {room.last_message}
         </p>
       )}
       <div className="flex items-center justify-between mt-1">
