@@ -901,39 +901,46 @@ const AdminSettings = () => {
                     <p className="text-sm text-muted-foreground text-center py-8">Nenhuma macro encontrada</p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {paginatedMacros.map((m) => (
-                          <div
-                            key={m.id}
-                            className="group relative rounded-lg border border-border/50 bg-secondary/30 p-4 transition-colors hover:bg-secondary/60"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium text-sm truncate">{m.title}</span>
+                      <div className="border rounded-md overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/50">
+                              <th className="text-left font-medium px-3 py-2 text-muted-foreground">Título</th>
+                              <th className="text-left font-medium px-3 py-2 text-muted-foreground hidden sm:table-cell">Visibilidade</th>
+                              <th className="text-left font-medium px-3 py-2 text-muted-foreground hidden md:table-cell">Atalho</th>
+                              <th className="text-left font-medium px-3 py-2 text-muted-foreground hidden lg:table-cell">Conteúdo</th>
+                              <th className="text-right font-medium px-3 py-2 text-muted-foreground w-20">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paginatedMacros.map((m) => (
+                              <tr key={m.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                                <td className="px-3 py-2 font-medium">{m.title}</td>
+                                <td className="px-3 py-2 hidden sm:table-cell">
                                   <Badge variant={m.is_private ? "secondary" : "default"} className="text-[10px] px-1.5 py-0">
                                     {m.is_private ? "Particular" : "Pública"}
                                   </Badge>
-                                </div>
-                                {m.shortcut && (
-                                  <span className="text-xs font-mono text-muted-foreground mt-1 block">/{m.shortcut}</span>
-                                )}
-                                {m.category && (
-                                  <span className="text-[11px] text-muted-foreground">{m.category}</span>
-                                )}
-                              </div>
-                              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openMacroDialog(m)}>
-                                  <Edit className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteMacro(m.id)}>
-                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </Button>
-                              </div>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{m.content}</p>
-                          </div>
-                        ))}
+                                </td>
+                                <td className="px-3 py-2 hidden md:table-cell">
+                                  {m.shortcut ? <span className="font-mono text-xs text-muted-foreground">/{m.shortcut}</span> : "—"}
+                                </td>
+                                <td className="px-3 py-2 hidden lg:table-cell">
+                                  <span className="text-muted-foreground text-xs line-clamp-1 max-w-[200px] block">{m.content}</span>
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="flex justify-end gap-0.5">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openMacroDialog(m)}>
+                                      <Edit className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteMacro(m.id)}>
+                                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
 
                       {macroTotalPages > 1 && (
