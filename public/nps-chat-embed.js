@@ -26,6 +26,8 @@
 
   var resolverReady = false;
   var pendingUpdates = [];
+  var iframeCreated = false;
+  var fabElement = null;
 
   var RESERVED_KEYS = ["name", "email", "phone", "company_id", "company_name", "user_id"];
 
@@ -59,8 +61,6 @@
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
   };
 
-  // Colors are now read directly from banner.bg_color and banner.text_color (database source of truth)
-
   // --- Banner Logic ---
   var bannerContainer = null;
 
@@ -92,7 +92,6 @@
     var borderCss = BORDER_CSS[banner.border_style] || "";
     var shadowCss = SHADOW_CSS[banner.shadow_style] || "";
 
-    // Use bg_color and text_color directly from database
     var useBg = banner.bg_color || "#3B82F6";
     var useText = banner.text_color || "#FFFFFF";
 
@@ -109,7 +108,6 @@
       borderCss +
       shadowCss;
 
-    // Decorative geometric shapes
     if (banner.has_decorations) {
       div.style.overflow = "visible";
       var decoLeft1 = document.createElement("div");
@@ -148,12 +146,10 @@
       div.appendChild(decoDot.firstChild);
     }
 
-    // Animate in
     setTimeout(function () {
       div.style.transform = "translateY(0)";
     }, 10);
 
-    // Close button
     var closeBtn = document.createElement("button");
     closeBtn.innerHTML = "✕";
     closeBtn.style.cssText =
@@ -176,7 +172,6 @@
     };
     div.appendChild(closeBtn);
 
-    // Content row
     var contentDiv = document.createElement("div");
     contentDiv.style.cssText =
       "display:flex;align-items:center;justify-content:center;gap:10px;text-align:center;width:100%;max-width:80ch;overflow:hidden;min-width:0;margin:0 auto;";
@@ -202,7 +197,6 @@
     contentDiv.appendChild(text);
     div.appendChild(contentDiv);
 
-    // Actions row
     var hasActions = banner.link_url || banner.has_voting;
     if (hasActions) {
       var actions = document.createElement("div");
@@ -252,7 +246,6 @@
       div.appendChild(actions);
     }
 
-    // Auto-dismiss
     if (banner.auto_dismiss_seconds && banner.auto_dismiss_seconds > 0) {
       setTimeout(function () {
         div.style.transform = "translateY(-100%)";
@@ -263,7 +256,6 @@
       }, banner.auto_dismiss_seconds * 1000);
     }
 
-    // Display frequency check
     var freqKey = "banner_freq_" + banner.assignment_id;
     if (banner.display_frequency === "once_per_session") {
       if (sessionStorage.getItem(freqKey)) return null;
@@ -385,9 +377,39 @@
     document.body.appendChild(overlay);
   }
 
-  // --- Fetch dynamic widget config ---
+  // --- Widget Config with localStorage cache (1h TTL) ---
+  var CONFIG_CACHE_KEY = "nps_widget_config_cache";
+  var CONFIG_CACHE_TTL = 3600000; // 1 hour
+
+  function getCachedConfig() {
+    try {
+      var raw = localStorage.getItem(CONFIG_CACHE_KEY);
+      if (!raw) return null;
+      var cached = JSON.parse(raw);
+      if (cached.api_key !== apiKey) return null;
+      if (Date.now() - cached.ts > CONFIG_CACHE_TTL) return null;
+      return cached.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setCachedConfig(data) {
+    try {
+      localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({ api_key: apiKey, ts: Date.now(), data: data }));
+    } catch (e) {}
+  }
+
   function fetchWidgetConfig(callback) {
     if (!apiKey) {
+      callback();
+      return;
+    }
+
+    // Try cache first
+    var cached = getCachedConfig();
+    if (cached) {
+      applyWidgetConfig(cached);
       callback();
       return;
     }
@@ -397,22 +419,27 @@
         return r.json();
       })
       .then(function (data) {
-        if (data.fields) fieldDefinitions = data.fields;
-        if (data.settings) {
-          widgetSettings = data.settings;
-          if (data.settings.company_name && !script.getAttribute("data-company-name")) {
-            companyName = data.settings.company_name;
-          }
-          if (data.settings.primary_color && !script.getAttribute("data-primary-color")) {
-            primaryColor = data.settings.primary_color;
-          }
-        }
-        if (data.owner_user_id) resolvedOwnerUserId = data.owner_user_id;
+        applyWidgetConfig(data);
+        setCachedConfig(data);
         callback();
       })
       .catch(function () {
         callback();
       });
+  }
+
+  function applyWidgetConfig(data) {
+    if (data.fields) fieldDefinitions = data.fields;
+    if (data.settings) {
+      widgetSettings = data.settings;
+      if (data.settings.company_name && !script.getAttribute("data-company-name")) {
+        companyName = data.settings.company_name;
+      }
+      if (data.settings.primary_color && !script.getAttribute("data-primary-color")) {
+        primaryColor = data.settings.primary_color;
+      }
+    }
+    if (data.owner_user_id) resolvedOwnerUserId = data.owner_user_id;
   }
 
   // --- Separate reserved vs custom data ---
@@ -511,6 +538,80 @@
       });
   }
 
+  // --- Pure JS FAB (no iframe needed) ---
+  function createFAB() {
+    var btn = document.createElement("button");
+    btn.id = "nps-chat-fab";
+    var isCircle = buttonShape === "circle";
+    var size = isCircle ? "56px" : "auto";
+    var radius = isCircle ? "50%" : "28px";
+    var padding = isCircle ? "0" : "12px 20px";
+
+    btn.style.cssText =
+      "position:fixed;bottom:20px;" +
+      (position === "left" ? "left:20px" : "right:20px") +
+      ";width:" + size + ";height:56px;border:none;cursor:pointer;z-index:999;" +
+      "background:" + primaryColor + ";color:#fff;border-radius:" + radius + ";" +
+      "padding:" + padding + ";display:flex;align-items:center;justify-content:center;gap:8px;" +
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;font-weight:600;" +
+      "box-shadow:0 4px 16px rgba(0,0,0,0.2);transition:transform 0.2s,box-shadow 0.2s;";
+
+    btn.innerHTML =
+      '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+
+    if (!isCircle) {
+      btn.innerHTML += "<span>" + companyName + "</span>";
+    }
+
+    btn.onmouseenter = function () {
+      btn.style.transform = "scale(1.05)";
+      btn.style.boxShadow = "0 6px 24px rgba(0,0,0,0.3)";
+    };
+    btn.onmouseleave = function () {
+      btn.style.transform = "scale(1)";
+      btn.style.boxShadow = "0 4px 16px rgba(0,0,0,0.2)";
+    };
+
+    btn.onclick = function () {
+      onFABClick();
+    };
+
+    document.body.appendChild(btn);
+    fabElement = btn;
+  }
+
+  function hideFAB() {
+    if (fabElement) {
+      fabElement.style.display = "none";
+    }
+  }
+
+  function showFAB() {
+    if (fabElement) {
+      fabElement.style.display = "flex";
+    }
+  }
+
+  // --- Lazy iframe creation (only on first FAB click) ---
+  function onFABClick() {
+    hideFAB();
+
+    if (iframeCreated) {
+      // iframe already exists, just toggle it open
+      if (chatIframe) {
+        chatIframe.contentWindow.postMessage({ type: "nps-chat-open" }, "*");
+      }
+      return;
+    }
+
+    // First click: resolve visitor then create iframe
+    resolveVisitor(function () {
+      createChatWidget();
+      iframeCreated = true;
+    });
+  }
+
   // --- Chat Widget Iframe ---
   function createChatWidget() {
     var iframe = document.createElement("iframe");
@@ -550,16 +651,21 @@
     if (resolvedNeedsForm) iframeSrc += "&needsForm=true";
     if (resolvedHasHistory) iframeSrc += "&hasHistory=true";
 
+    // Tell iframe to open immediately (user already clicked FAB)
+    iframeSrc += "&autoOpen=true";
+
     iframe.src = iframeSrc;
+    // Start with open size since user clicked the FAB
+    var maxH = Math.min(700, window.innerHeight - 16);
     iframe.style.cssText =
-      "position:fixed;bottom:20px;" +
-      (position === "left" ? "left:20px" : "right:20px") +
-      ";width:80px;height:80px;border:none;z-index:999;background:transparent;";
+      "position:fixed;bottom:0;" +
+      (position === "left" ? "left:0" : "right:0") +
+      ";width:420px;height:" + maxH + "px;border:none;z-index:999;background:transparent;";
     iframe.allow = "clipboard-write";
     document.body.appendChild(iframe);
     chatIframe = iframe;
 
-    var widgetIsOpen = false;
+    var widgetIsOpen = true;
 
     function recalcHeight() {
       if (widgetIsOpen) {
@@ -579,14 +685,40 @@
           iframe.style.height = maxH + "px";
           iframe.style.bottom = "0";
           iframe.style[position === "left" ? "left" : "right"] = "0";
+          hideFAB();
         } else {
-          iframe.style.width = "80px";
-          iframe.style.height = "80px";
-          iframe.style.bottom = "20px";
-          iframe.style[position === "left" ? "left" : "right"] = "20px";
+          // Widget closed: hide iframe, show FAB
+          iframe.style.width = "0px";
+          iframe.style.height = "0px";
+          showFAB();
         }
       }
+
+      if (event.data && event.data.type === "chat-unread-count") {
+        updateFABBadge(event.data.count || 0);
+      }
     });
+  }
+
+  // --- Unread badge on FAB ---
+  function updateFABBadge(count) {
+    if (!fabElement) return;
+    var existing = fabElement.querySelector("[data-badge]");
+    if (count <= 0) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (!existing) {
+      existing = document.createElement("span");
+      existing.setAttribute("data-badge", "true");
+      existing.style.cssText =
+        "position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;border-radius:10px;" +
+        "background:#ef4444;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;" +
+        "justify-content:center;padding:0 5px;box-shadow:0 2px 4px rgba(0,0,0,0.2);";
+      fabElement.style.position = "fixed"; // ensure positioning context
+      fabElement.appendChild(existing);
+    }
+    existing.textContent = count > 99 ? "99+" : String(count);
   }
 
   // --- Public API: window.NPSChat ---
@@ -613,13 +745,14 @@
     },
   };
 
-  // Init
+  // --- Init ---
   function init() {
     fetchWidgetConfig(function () {
-      resolveVisitor(function () {
-        loadBanners();
-        createChatWidget();
-      });
+      // Only load banners on page load (lightweight)
+      // Banners can use apiKey+externalId or saved token — no resolve needed
+      loadBanners();
+      // Create pure JS FAB — NO iframe, NO resolve-visitor
+      createFAB();
     });
   }
 

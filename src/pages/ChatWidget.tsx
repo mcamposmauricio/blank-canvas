@@ -49,6 +49,7 @@ const ChatWidget = () => {
   const paramCompanyContactId = searchParams.get("companyContactId");
   const paramContactId = searchParams.get("contactId");
   const paramApiKey = searchParams.get("apiKey");
+  const paramAutoOpen = searchParams.get("autoOpen") === "true";
 
   const isResolvedVisitor = !!paramVisitorToken && !!paramOwnerUserId;
 
@@ -56,7 +57,7 @@ const ChatWidget = () => {
   const resolvedContactIdRef = useRef<string | null>(null);
   const resolvedCompanyContactIdRef = useRef<string | null>(null);
 
-  const [isOpen, setIsOpen] = useState(!isEmbed);
+  const [isOpen, setIsOpen] = useState(!isEmbed || paramAutoOpen);
   const [phase, setPhase] = useState<WidgetPhase>("form");
   const [visitorToken, setVisitorToken] = useState<string | null>(null);
   const [visitorId, setVisitorId] = useState<string | null>(null);
@@ -150,6 +151,11 @@ const ChatWidget = () => {
   useEffect(() => {
     if (!isEmbed) return;
     const handler = (event: MessageEvent) => {
+      // Handle open command from parent (lazy FAB re-open)
+      if (event.data && event.data.type === "nps-chat-open") {
+        setIsOpen(true);
+        return;
+      }
       if (event.data && event.data.type === "nps-chat-update" && event.data.props) {
         const props = event.data.props;
         const { name, email, phone, ...custom } = props;
@@ -246,19 +252,10 @@ const ChatWidget = () => {
     const lastMsgMap: Record<string, { content: string; sender_type: string }> = {};
     if (roomIds.length > 0) {
       const { data: allMsgs } = await supabase
-        .from("chat_messages")
-        .select("room_id, content, sender_type")
-        .in("room_id", roomIds)
-        .neq("sender_type", "system")
-        .eq("is_internal", false)
-        .order("created_at", { ascending: false });
+        .rpc("get_last_messages_for_rooms", { p_room_ids: roomIds });
       if (allMsgs) {
-        const seen = new Set<string>();
         for (const m of allMsgs as { room_id: string; content: string; sender_type: string }[]) {
-          if (!seen.has(m.room_id)) {
-            seen.add(m.room_id);
-            lastMsgMap[m.room_id] = { content: m.content, sender_type: m.sender_type };
-          }
+          lastMsgMap[m.room_id] = { content: m.content, sender_type: m.sender_type };
         }
       }
     }
