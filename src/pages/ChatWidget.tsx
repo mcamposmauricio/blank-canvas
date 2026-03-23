@@ -70,6 +70,7 @@ const ChatWidget = () => {
   const [formData, setFormData] = useState({ name: paramVisitorName || "", email: "", phone: "" });
   const [attendantName, setAttendantName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initLoading, setInitLoading] = useState(true);
   const [allBusy, setAllBusy] = useState(false);
   const [outsideHours, setOutsideHours] = useState(false);
   const [historyRooms, setHistoryRooms] = useState<HistoryRoom[]>([]);
