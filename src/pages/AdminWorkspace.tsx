@@ -213,16 +213,23 @@ const AdminWorkspace = () => {
     };
   }, [selectedRoomId, user?.id]);
 
-  // Filter rooms based on viewing context
-  const filteredRooms = viewingUnassigned
-    ? rooms.filter((r) => !r.attendant_id)
-    : viewingAttendantId
-    ? rooms.filter((r) => r.attendant_id === viewingAttendantId)
-    : rooms.filter((r) => {
-        // Show only own chats (not unassigned, not other attendants)
-        if (!r.attendant_id) return false;
-        return r.attendant_id === userAttendantId;
-      });
+  // Filter rooms based on viewing context, always include paramRoomId if navigated directly
+  const filteredRooms = (() => {
+    let filtered = viewingUnassigned
+      ? rooms.filter((r) => !r.attendant_id)
+      : viewingAttendantId
+      ? rooms.filter((r) => r.attendant_id === viewingAttendantId)
+      : rooms.filter((r) => {
+          if (!r.attendant_id) return false;
+          return r.attendant_id === userAttendantId;
+        });
+    // Always include the paramRoomId room so direct links work
+    if (paramRoomId && !filtered.some((r) => r.id === paramRoomId)) {
+      const paramRoom = rooms.find((r) => r.id === paramRoomId);
+      if (paramRoom) filtered = [paramRoom, ...filtered];
+    }
+    return filtered;
+  })();
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
   const [pendingSelectedRoom, setPendingSelectedRoom] = useState<{
@@ -232,15 +239,41 @@ const AdminWorkspace = () => {
   } | null>(null);
 
   // Clear selectedRoomId if no longer in filteredRooms (and not a pending room)
+  // Never clear if it matches paramRoomId (user navigated intentionally via link)
   useEffect(() => {
     if (!selectedRoomId) return;
     if (pendingSelectedRoom) return;
+    if (paramRoomId && selectedRoomId === paramRoomId) return;
     const found = filteredRooms.some((r) => r.id === selectedRoomId);
     if (!found && !roomsLoading) {
       setSelectedRoomId(null);
       setReplyTarget(null);
     }
-  }, [filteredRooms, selectedRoomId, roomsLoading, pendingSelectedRoom]);
+  }, [filteredRooms, selectedRoomId, roomsLoading, pendingSelectedRoom, paramRoomId]);
+
+  // If paramRoomId is set but room is not in rooms list, fetch it directly
+  useEffect(() => {
+    if (!paramRoomId || !user) return;
+    const inRooms = rooms.some((r) => r.id === paramRoomId);
+    if (inRooms || roomsLoading) return;
+    // Room not in active rooms — fetch directly and set as pendingSelectedRoom
+    (async () => {
+      const { data } = await supabase
+        .from("chat_rooms")
+        .select("id, visitor_id, status, resolution_status, attendant_id, contact_id, company_contact_id, started_at, chat_visitors!visitor_id(name)")
+        .eq("id", paramRoomId)
+        .maybeSingle();
+      if (data) {
+        const visitor = (data as any).chat_visitors as { name?: string } | null;
+        setPendingSelectedRoom({
+          id: data.id, visitor_name: visitor?.name ?? "Visitante", visitor_id: data.visitor_id,
+          status: data.status ?? "closed", resolution_status: data.resolution_status ?? "pending",
+          attendant_id: data.attendant_id, contact_id: data.contact_id, company_contact_id: data.company_contact_id,
+          started_at: data.started_at,
+        });
+      }
+    })();
+  }, [paramRoomId, rooms, roomsLoading, user]);
 
   const effectiveRoom = selectedRoom ?? pendingSelectedRoom;
   const isPendingRoom = effectiveRoom?.status === "closed" && (effectiveRoom as any)?.resolution_status === "pending";
