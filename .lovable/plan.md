@@ -1,31 +1,30 @@
 
 
-# Plano: Ajustar larguras do sidebar, room list e truncamento de textos
+# Plano: Otimizacao de Performance do Workspace
 
 ## Mudancas
 
-### 1. Sidebar 20% menor (`sidebar.tsx`)
+### 1. VisitorInfoPanel.tsx — Paralelizar e eliminar duplicatas
 
-Sidebar atual: `16rem` (256px). Reduzir 20%: `12.8rem` (~205px).
+**Problema atual (linhas 291-422):**
+- Visitor query (await) → field defs query (await) → company+timeline+contact em paralelo (await) → contacts query DUPLICADA (linha 403) → fetchQueueInfo sequencial → fetchRecentChats sequencial
+- Total: ~6-8 roundtrips sequenciais
 
-- `SIDEBAR_WIDTH`: `"16rem"` → `"12.8rem"`
+**Solucao:**
+- Grupo 1 (paralelo): visitor + field_defs
+- Grupo 2 (paralelo, usa resultado do visitor): company + timeline + companyContact + recentChats
+- Grupo 3 (paralelo, usa resultado do company): category + auto_rules + teams + assignment
+- Eliminar a query duplicada de `contacts` na linha 403 — usar o resultado ja obtido no grupo 2
+- Cachear `field_defs` em `useRef` para nao rebuscar ao trocar de room
 
-### 2. Room list 20% maior (`AdminWorkspace.tsx`)
+### 2. useChatRealtime.ts — Adicionar `.limit(100)` no fetchRooms
 
-Room list atual: `260px` desktop, `200px` compact. Aumentar 20%: `312px` desktop, `240px` compact.
-
-- Linha 628: `w-[260px]` → `w-[312px]`, `w-[200px]` → `w-[240px]`
-
-### 3. Textos truncados no ChatRoomList (`ChatRoomList.tsx`)
-
-- Linha 114: remover o `slice(0, 60)` manual — ja tem `truncate` (CSS ellipsis) na `<p>` que faz o trabalho. O slice duplo com truncate causa inconsistencia.
-- Garantir que o container do badge+unread tem `overflow-hidden` e `min-w-0` para nao empurrar o nome.
+Linha 204: adicionar `.limit(100)` apos o `.order()`. Reduz payload e acelera queries de enriquecimento.
 
 ## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/ui/sidebar.tsx` | `SIDEBAR_WIDTH` de `16rem` → `12.8rem` |
-| `src/pages/AdminWorkspace.tsx` | Room list `312px` / `240px` |
-| `src/components/chat/ChatRoomList.tsx` | Remover `slice(0,60)`, confiar no CSS truncate |
+| `src/components/chat/VisitorInfoPanel.tsx` | Paralelizar fetchData, cachear fieldDefs, remover query duplicada |
+| `src/hooks/useChatRealtime.ts` | `.limit(100)` no fetchRooms |
 
