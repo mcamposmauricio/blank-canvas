@@ -247,19 +247,10 @@ const ChatWidget = () => {
     const lastMsgMap: Record<string, { content: string; sender_type: string }> = {};
     if (roomIds.length > 0) {
       const { data: allMsgs } = await supabase
-        .from("chat_messages")
-        .select("room_id, content, sender_type")
-        .in("room_id", roomIds)
-        .neq("sender_type", "system")
-        .eq("is_internal", false)
-        .order("created_at", { ascending: false });
+        .rpc("get_last_messages_for_rooms", { p_room_ids: roomIds });
       if (allMsgs) {
-        const seen = new Set<string>();
         for (const m of allMsgs as { room_id: string; content: string; sender_type: string }[]) {
-          if (!seen.has(m.room_id)) {
-            seen.add(m.room_id);
-            lastMsgMap[m.room_id] = { content: m.content, sender_type: m.sender_type };
-          }
+          lastMsgMap[m.room_id] = { content: m.content, sender_type: m.sender_type };
         }
       }
     }
