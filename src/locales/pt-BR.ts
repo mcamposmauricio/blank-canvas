@@ -660,7 +660,7 @@ export default {
   "chat.dashboard.online_attendants": "Atendentes Online",
   "chat.dashboard.closed_today": "Encerradas Hoje",
   "chat.workspace.title": "Workspace",
-  "chat.workspace.station": "Fila do chat",
+  "chat.workspace.station": "Fila chat",
   "chat.workspace.you": "(você)",
   "chat.workspace.otherTeams": "Outros times",
   "chat.workspace.conversations": "Conversas",
