@@ -201,7 +201,8 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
       let query = supabase
         .from("chat_rooms")
         .select("*, chat_visitors!visitor_id(name, email)")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(100);
 
       if (optionsRef.current?.excludeClosed) {
         query = query.in("status", ["active", "waiting"]);
