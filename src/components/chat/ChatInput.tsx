@@ -716,7 +716,7 @@ export function ChatInput({ onSend, roomId, senderName }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           disabled={sending}
           rows={1}
-          className="min-h-[36px] max-h-[200px] resize-y py-2"
+          className="min-h-[54px] max-h-[200px] resize-y py-2"
         />
         <Button
           size="icon"

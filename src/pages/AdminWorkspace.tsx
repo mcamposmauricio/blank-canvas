@@ -624,7 +624,7 @@ const AdminWorkspace = () => {
           </div>
 
           {/* Center + Right: Chat area + Side panel — resizable between them */}
-          <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
+          <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0 overflow-hidden">
           <ResizablePanel defaultSize={infoPanelOpen ? 65 : 100} minSize={40}>
             <div className={`h-full min-w-0 ${isCompact ? 'p-1 pt-2 pb-2' : 'p-1.5 pt-3 pb-3'}`}>
               {effectiveRoom ? (
