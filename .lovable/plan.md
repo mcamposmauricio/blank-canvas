@@ -1,99 +1,61 @@
 
 
-# Plano: Importar historico de chat completo do JSON exportado
+# Plano: Completar importacao com JSON completo + deduplicacao
 
-## Escopo do JSON
+## Situacao atual no destino
 
-| Secao | Qtd estimada | Linhas |
-|---|---|---|
-| contacts (empresas) | ~400 | 7-21500 |
-| company_contacts | ~500 | 21500-33000 |
-| visitors | ~700 | 33000-48000 |
-| rooms | ~1000 | 48000-76000 |
-| messages | ~15000+ | 76000-245352 |
-| tags | ~100 | 245353-246378 |
-| room_tags | ~1000 | 246379-249323 |
-| attendants | 7 | 249325-249452 |
+| Tabela | Existente |
+|---|---|
+| contacts | 480 |
+| company_contacts | 521 |
+| visitors | 551 |
+| rooms | 1,047 (1046 closed + 1 active) |
+| messages | 12,886 |
 
-## Por que nao Edge Function
+O JSON novo tem ~369K linhas — significativamente maior que o primeiro (250K linhas). O primeiro import foi limitado a ~1000 rooms.
 
-O JSON tem 250K linhas (~15MB+). Edge functions tem timeout de 150s e limite de body. A abordagem correta e um script Python executado no sandbox com acesso direto ao banco via `psql`/`psycopg2`.
+## Abordagem
 
-## Implementacao
+Script Python executado no sandbox (mesmo approach anterior). Processar o JSON completo com deduplicacao em cada fase para nao duplicar os ~1000 rooms ja importados.
 
-Um script Python (`/tmp/import_chat.py`) que:
+### Deduplicacao por fase
 
-### Fase 0 — Setup
-- Le o JSON do arquivo uploaded
-- Conecta ao banco via env vars pg
-- Busca `tenant_id` e `user_id` do admin no banco destino (o tenant ativo `eee96b59...`)
+1. **Contacts**: Buscar por `external_id` no destino. Se existir, mapear sem recriar. Se nao, INSERT.
+2. **Company_contacts**: Buscar por `external_id` + `tenant_id`. Se existir, mapear. Se nao, INSERT.
+3. **Attendants**: Mapear por `user_email` (mesmo de antes). 5 atendentes ja mapeados.
+4. **Tags**: Buscar por `name` no mesmo tenant. Mapear existentes.
+5. **Visitors**: Buscar visitors ja criados pelo `contact_id` + `company_contact_id` mapeados. Se o visitor ja existe (mesmo contact+company_contact), reusar. Senao, INSERT.
+6. **Rooms**: Deduplicar pelo `created_at` + `visitor_id` (mapeado). Se ja existe room com mesmo created_at e visitor, pular. Senao, INSERT. **Desabilitar triggers antes, reabilitar depois.**
+7. **Messages**: Para rooms novos, inserir todas as mensagens. Para rooms ja existentes, pular.
+8. **Room_tags**: Inserir apenas para rooms novos.
 
-### Fase 1 — Empresas (contacts)
-- Para cada contact do JSON, buscar no destino por `external_id` (mesmo tenant)
-- Se existir: mapear `old_id → existing_id`, nao duplicar
-- Se nao existir: INSERT com todos os campos (name, company_document, custom_fields, mrr, health_score, etc.) usando `user_id` e `tenant_id` do destino
-- Mapa: `old_contact_id → new_contact_id`
+### Chats pendentes (active/waiting)
 
-### Fase 2 — Contatos de empresa (company_contacts)
-- Resolver `company_id` via mapa da Fase 1
-- Buscar duplicata por `external_id` + `tenant_id`
-- Se nao existir: INSERT preservando chat_total, chat_avg_csat, chat_last_at
-- Mapa: `old_cc_id → new_cc_id`
+Rooms com `status = 'active'` ou `'waiting'` no JSON serao importados com o status original. Como os triggers estao desabilitados durante o INSERT, o auto-assignment nao vai disparar. O `attendant_id` sera mapeado pelo de-para de atendentes, garantindo que o chat aparece para o atendente correto no workspace.
 
-### Fase 3 — Atendentes
-- Para cada attendant do JSON, buscar `user_profiles` + `attendant_profiles` no destino pelo `user_email`
-- Mapa: `old_attendant_id → new_attendant_id` (NULL se nao encontrado)
+Apos a importacao, executar um UPDATE nos `attendant_profiles` para recalcular `active_conversations` baseado na contagem real de rooms ativos.
 
-### Fase 4 — Tags
-- Para cada tag, buscar por `name` no mesmo tenant
-- Se existir: mapear
-- Se nao existir: INSERT com name, color
-- Mapa: `old_tag_id → new_tag_id`
+### Recalculo de contadores
 
-### Fase 5 — Visitors
-- INSERT novo para cada visitor com:
-  - `contact_id` → mapa Fase 1
-  - `company_contact_id` → mapa Fase 2
-  - `owner_user_id` e `tenant_id` do destino
-  - Preservar name, email, phone, role, department, metadata
-  - Gerar novo `visitor_token` (uuid)
-- Mapa: `old_visitor_id → new_visitor_id`
+Apos inserir tudo:
+```sql
+UPDATE attendant_profiles SET active_conversations = (
+  SELECT count(*) FROM chat_rooms 
+  WHERE attendant_id = attendant_profiles.id 
+  AND status IN ('active', 'waiting')
+) WHERE tenant_id = 'eee96b59-...';
+```
 
-### Fase 6 — Rooms
-- **Desabilitar triggers** em `chat_rooms` antes de inserir (evitar auto-assignment)
-- INSERT com todos IDs mapeados (visitor, attendant, contact, company_contact)
-- Preservar: status, priority, csat_score, csat_comment, resolution_status, created_at, started_at, assigned_at, closed_at, metadata
-- **Reabilitar triggers** apos inserir
-- Mapa: `old_room_id → new_room_id`
+## Execucao
 
-### Fase 7 — Mensagens
-- INSERT em batches de 500
-- `room_id` → mapa Fase 6
-- `sender_id`: visitor → mapa Fase 5, attendant → buscar por user_id nos atendentes mapeados (o sender_id nas mensagens e o `user_id` do atendente, nao o `attendant_id`)
-- Preservar: sender_type, sender_name, content, message_type, is_internal, metadata, created_at, deleted_at
-
-### Fase 8 — Room Tags
-- INSERT com room_id e tag_id mapeados
-
-### Fase 9 — Reabilitar triggers
-- `ALTER TABLE chat_rooms ENABLE TRIGGER ALL`
-
-## Deduplicacao futura
-
-As empresas importadas terao `external_id` preenchido. Quando o widget de chat resolver o visitante (via `resolve-chat-visitor`), ele ja busca por `external_id` na tabela `contacts`, garantindo que nao cria duplicata.
-
-## Saida
-
-O script imprime relatorio:
-- X empresas criadas / Y existentes
-- X contatos criados / Y existentes
-- X visitors criados
-- X rooms criados
-- X mensagens inseridas
-- X tags criadas / Y existentes
-- X room_tags inseridos
+Script Python unico (`/tmp/import_chat_v2.py`) que:
+1. Le o JSON de 369K linhas
+2. Busca dados existentes no destino para deduplicacao
+3. Processa fases 1-8 sequencialmente
+4. Recalcula contadores de atendentes
+5. Imprime relatorio: X criados / Y existentes por tabela
 
 ## Nenhum arquivo do projeto sera alterado
 
-Execucao direta no banco via script Python.
+Execucao direta no banco via script.
 
