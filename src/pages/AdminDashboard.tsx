@@ -59,7 +59,7 @@ const RESOLUTION_COLORS: Record<string, string> = {
 
 const AdminDashboard = () => {
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, tenantId } = useAuth();
   const navigate = useNavigate();
 
   // Initialize with today
@@ -73,7 +73,7 @@ const AdminDashboard = () => {
   const [companyOptions, setCompanyOptions] = useState<{ id: string; name: string }[]>([]);
   const [contactOptions, setContactOptions] = useState<{ id: string; name: string; companyId: string }[]>([]);
   const { stats, loading, refetch, realtimeEnabled, toggleRealtime } = useDashboardStats(filters);
-  const { attendants, unassignedRooms, loading: queuesLoading } = useAttendantQueues();
+  const { attendants, unassignedRooms, loading: queuesLoading } = useAttendantQueues(tenantId);
 
   const [teams, setTeams] = useState<{ id: string; name: string; memberIds: string[] }[]>([]);
   const [prevStats, setPrevStats] = useState<{ totalChats: number; avgCsat: number | null; resolutionRate: number | null } | null>(null);
