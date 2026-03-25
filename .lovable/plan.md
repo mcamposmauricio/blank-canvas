@@ -1,61 +1,62 @@
 
 
-# Plano: Layout do ChatInput, Contador de reopen, Scroll em pendentes, Slug do Help Center
+# Plano: Corrigir historico de chats antigos no widget
 
-## 1. Reorganizar layout do ChatInput
+## Problema
 
-**Problema:** Botoes de acao (negrito, nota, anexo, emoji, macros, artigos, atalhos) ficam na mesma linha que o textarea e o botao de enviar. O usuario quer os botoes de acao ABAIXO do textarea alinhados a esquerda, e o botao de enviar a direita do textarea.
+Dois problemas combinados impedem a visualizacao do historico:
 
-**Arquivo:** `src/components/chat/ChatInput.tsx` (linhas 602-729)
+### 1. Widget nao mostra historico para visitantes que retornam via token salvo
 
-**Mudanca:** Reestruturar o JSX:
+No `ChatWidget.tsx` (linhas 353-380), quando um visitante retorna com `visitor_token` salvo no localStorage e nao tem room ativo, o codigo nao faz nada — o `phase` permanece em `"form"`. O visitante ve o formulario de novo em vez do historico.
+
+Comparacao: quando o visitante vem via `paramVisitorToken` + `isResolvedVisitor` (linhas 310-324), o codigo corretamente faz `setPhase("history")`. Mas o branch do `savedToken` (linha 344) nao tem essa logica.
+
+**Correcao em `src/pages/ChatWidget.tsx` (linhas 353-380):**
+
+Apos encontrar o visitor pelo token salvo e verificar que nao ha room ativo, checar se existem rooms fechados. Se sim, ir para `phase = "history"`. Se nao, ficar em `"form"`.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  [Textarea..........................]  [Enviar]      │
-│  [B] [👁] [📎] [😊] [⚡] [📖] [⌨]                  │
-└─────────────────────────────────────────────────────┘
+if (visitor) {
+  setVisitorId(visitor.id);
+  // Check active rooms
+  const { data: room } = await supabase...
+  if (room) {
+    // existing logic for active/waiting
+  } else {
+    // NEW: check for any closed rooms (history)
+    const { count } = await supabase
+      .from("chat_rooms")
+      .select("id", { count: "exact", head: true })
+      .eq("visitor_id", visitor.id);
+    if ((count || 0) > 0) {
+      setPhase("history");
+    }
+  }
+}
 ```
 
-- Linha 1: `flex` com `Textarea` (flex-1) + botao `Send` (alinhado a direita)
-- Linha 2: `flex gap-1` com todos os botoes de acao, alinhados a esquerda
+### 2. Visitantes duplicados da migracao
 
-## 2. Contador de chats no workspace ao reabrir via widget
+A migracao criou novos visitors com novos `visitor_token`s. Se um visitante ja tinha um token no localStorage (de antes da migracao), ele encontra o visitor antigo (pre-migracao, sem rooms). Os rooms importados estao vinculados ao visitor importado (diferente).
 
-**Problema:** Quando o visitante reabre um chat fechado via widget (linha 800-804 de ChatWidget.tsx), o UPDATE muda `status: closed → active`. O workspace deveria captar isso via realtime. O `useChatRealtime.ts` (linha 326-329) chama `fetchSingleRoom` quando `idx === -1`, o que deveria funcionar.
+**Correcao no `resolve-chat-visitor/index.ts` (funcao `findOrCreateVisitor`):**
 
-**Causa provavel:** O `resync_attendant_counter_on_room_change` trigger faz um COUNT real dos rooms ativos. Porem, o widget (linha 807-815) TAMBEM incrementa manualmente `active_conversations`, causando uma **race condition** com o trigger. Resultado: o trigger roda, conta N rooms, seta active_conversations=N, depois o widget incrementa para N+1 (errado), ou vice-versa.
+Quando encontra um visitor por `company_contact_id` (linha 432-436), usar `.limit(1)` e ordenar por rooms existentes. Mas a solucao mais robusta e um script de consolidacao:
 
-**Correcao:**
-- **ChatWidget.tsx** (linhas 806-818): Remover o incremento manual de `active_conversations` — o trigger `resync_attendant_counter_on_room_change` ja faz o resync via COUNT real. O incremento manual duplica o trabalho e causa inconsistencia.
-- **useChatRealtime.ts**: O handler de UPDATE no canal `chat-rooms-updates` ja trata o caso de `idx === -1` corretamente chamando `fetchSingleRoom`. Nao precisa de mudanca aqui.
+**Script de consolidacao de visitors duplicados (execucao direta no banco):**
 
-## 3. Paginacao e scroll na lista de pendentes
+Para cada `company_contact_id` com mais de 1 visitor:
+1. Escolher o visitor que tem mais rooms como "primario"
+2. UPDATE todos os `chat_rooms` dos visitors secundarios para apontar ao primario
+3. DELETE os visitors secundarios
 
-**Problema:** `PendingRoomsList.tsx` lista todos os rooms pendentes de uma vez, sem scroll nem paginacao.
-
-**Correcao em `src/components/chat/PendingRoomsList.tsx`:**
-- Envolver o `CollapsibleContent` em um `ScrollArea` com `max-h-[300px]` para scroll quando houver muitos itens
-- Adicionar paginacao simples (mostrar 20 por pagina + botao "Carregar mais") na query com `.range()`
-- Remover o `slice(0, 60)` na linha 127 — ja tem `truncate` no CSS
-
-## 4. Alterar slug do Help Center de "marq-hr" para "marq"
-
-**Problema:** O slug do tenant no banco e `marq-hr`. Precisa ser `marq`.
-
-**Correcao:** Migration SQL:
-```sql
-UPDATE tenants SET slug = 'marq' WHERE id = 'eee96b59-d7da-45cf-93f1-e3ab0796e678' AND slug = 'marq-hr';
-```
-
-Isso muda automaticamente todas as URLs publicas do Help Center de `/marq-hr/help/...` para `/marq/help/...`. O codigo ja usa o slug dinamicamente do banco.
+Isso garante que todo o historico fica sob um unico visitor.
 
 ## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/chat/ChatInput.tsx` | Textarea+Send na linha de cima, botoes de acao embaixo |
-| `src/pages/ChatWidget.tsx` | Remover incremento manual de active_conversations (linhas 806-818) |
-| `src/components/chat/PendingRoomsList.tsx` | ScrollArea + paginacao + remover slice |
-| Migration SQL | `UPDATE tenants SET slug = 'marq'` |
+| `src/pages/ChatWidget.tsx` | Adicionar `setPhase("history")` no branch do savedToken quando ha rooms fechados |
+| Script SQL (execucao direta) | Consolidar visitors duplicados por `company_contact_id` |
 
