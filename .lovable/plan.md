@@ -1,61 +1,61 @@
 
 
-# Plano: Completar importacao com JSON completo + deduplicacao
+# Plano: Layout do ChatInput, Contador de reopen, Scroll em pendentes, Slug do Help Center
 
-## Situacao atual no destino
+## 1. Reorganizar layout do ChatInput
 
-| Tabela | Existente |
-|---|---|
-| contacts | 480 |
-| company_contacts | 521 |
-| visitors | 551 |
-| rooms | 1,047 (1046 closed + 1 active) |
-| messages | 12,886 |
+**Problema:** Botoes de acao (negrito, nota, anexo, emoji, macros, artigos, atalhos) ficam na mesma linha que o textarea e o botao de enviar. O usuario quer os botoes de acao ABAIXO do textarea alinhados a esquerda, e o botao de enviar a direita do textarea.
 
-O JSON novo tem ~369K linhas — significativamente maior que o primeiro (250K linhas). O primeiro import foi limitado a ~1000 rooms.
+**Arquivo:** `src/components/chat/ChatInput.tsx` (linhas 602-729)
 
-## Abordagem
+**Mudanca:** Reestruturar o JSX:
 
-Script Python executado no sandbox (mesmo approach anterior). Processar o JSON completo com deduplicacao em cada fase para nao duplicar os ~1000 rooms ja importados.
-
-### Deduplicacao por fase
-
-1. **Contacts**: Buscar por `external_id` no destino. Se existir, mapear sem recriar. Se nao, INSERT.
-2. **Company_contacts**: Buscar por `external_id` + `tenant_id`. Se existir, mapear. Se nao, INSERT.
-3. **Attendants**: Mapear por `user_email` (mesmo de antes). 5 atendentes ja mapeados.
-4. **Tags**: Buscar por `name` no mesmo tenant. Mapear existentes.
-5. **Visitors**: Buscar visitors ja criados pelo `contact_id` + `company_contact_id` mapeados. Se o visitor ja existe (mesmo contact+company_contact), reusar. Senao, INSERT.
-6. **Rooms**: Deduplicar pelo `created_at` + `visitor_id` (mapeado). Se ja existe room com mesmo created_at e visitor, pular. Senao, INSERT. **Desabilitar triggers antes, reabilitar depois.**
-7. **Messages**: Para rooms novos, inserir todas as mensagens. Para rooms ja existentes, pular.
-8. **Room_tags**: Inserir apenas para rooms novos.
-
-### Chats pendentes (active/waiting)
-
-Rooms com `status = 'active'` ou `'waiting'` no JSON serao importados com o status original. Como os triggers estao desabilitados durante o INSERT, o auto-assignment nao vai disparar. O `attendant_id` sera mapeado pelo de-para de atendentes, garantindo que o chat aparece para o atendente correto no workspace.
-
-Apos a importacao, executar um UPDATE nos `attendant_profiles` para recalcular `active_conversations` baseado na contagem real de rooms ativos.
-
-### Recalculo de contadores
-
-Apos inserir tudo:
-```sql
-UPDATE attendant_profiles SET active_conversations = (
-  SELECT count(*) FROM chat_rooms 
-  WHERE attendant_id = attendant_profiles.id 
-  AND status IN ('active', 'waiting')
-) WHERE tenant_id = 'eee96b59-...';
+```
+┌─────────────────────────────────────────────────────┐
+│  [Textarea..........................]  [Enviar]      │
+│  [B] [👁] [📎] [😊] [⚡] [📖] [⌨]                  │
+└─────────────────────────────────────────────────────┘
 ```
 
-## Execucao
+- Linha 1: `flex` com `Textarea` (flex-1) + botao `Send` (alinhado a direita)
+- Linha 2: `flex gap-1` com todos os botoes de acao, alinhados a esquerda
 
-Script Python unico (`/tmp/import_chat_v2.py`) que:
-1. Le o JSON de 369K linhas
-2. Busca dados existentes no destino para deduplicacao
-3. Processa fases 1-8 sequencialmente
-4. Recalcula contadores de atendentes
-5. Imprime relatorio: X criados / Y existentes por tabela
+## 2. Contador de chats no workspace ao reabrir via widget
 
-## Nenhum arquivo do projeto sera alterado
+**Problema:** Quando o visitante reabre um chat fechado via widget (linha 800-804 de ChatWidget.tsx), o UPDATE muda `status: closed → active`. O workspace deveria captar isso via realtime. O `useChatRealtime.ts` (linha 326-329) chama `fetchSingleRoom` quando `idx === -1`, o que deveria funcionar.
 
-Execucao direta no banco via script.
+**Causa provavel:** O `resync_attendant_counter_on_room_change` trigger faz um COUNT real dos rooms ativos. Porem, o widget (linha 807-815) TAMBEM incrementa manualmente `active_conversations`, causando uma **race condition** com o trigger. Resultado: o trigger roda, conta N rooms, seta active_conversations=N, depois o widget incrementa para N+1 (errado), ou vice-versa.
+
+**Correcao:**
+- **ChatWidget.tsx** (linhas 806-818): Remover o incremento manual de `active_conversations` — o trigger `resync_attendant_counter_on_room_change` ja faz o resync via COUNT real. O incremento manual duplica o trabalho e causa inconsistencia.
+- **useChatRealtime.ts**: O handler de UPDATE no canal `chat-rooms-updates` ja trata o caso de `idx === -1` corretamente chamando `fetchSingleRoom`. Nao precisa de mudanca aqui.
+
+## 3. Paginacao e scroll na lista de pendentes
+
+**Problema:** `PendingRoomsList.tsx` lista todos os rooms pendentes de uma vez, sem scroll nem paginacao.
+
+**Correcao em `src/components/chat/PendingRoomsList.tsx`:**
+- Envolver o `CollapsibleContent` em um `ScrollArea` com `max-h-[300px]` para scroll quando houver muitos itens
+- Adicionar paginacao simples (mostrar 20 por pagina + botao "Carregar mais") na query com `.range()`
+- Remover o `slice(0, 60)` na linha 127 — ja tem `truncate` no CSS
+
+## 4. Alterar slug do Help Center de "marq-hr" para "marq"
+
+**Problema:** O slug do tenant no banco e `marq-hr`. Precisa ser `marq`.
+
+**Correcao:** Migration SQL:
+```sql
+UPDATE tenants SET slug = 'marq' WHERE id = 'eee96b59-d7da-45cf-93f1-e3ab0796e678' AND slug = 'marq-hr';
+```
+
+Isso muda automaticamente todas as URLs publicas do Help Center de `/marq-hr/help/...` para `/marq/help/...`. O codigo ja usa o slug dinamicamente do banco.
+
+## Arquivos
+
+| Arquivo | Mudanca |
+|---|---|
+| `src/components/chat/ChatInput.tsx` | Textarea+Send na linha de cima, botoes de acao embaixo |
+| `src/pages/ChatWidget.tsx` | Remover incremento manual de active_conversations (linhas 806-818) |
+| `src/components/chat/PendingRoomsList.tsx` | ScrollArea + paginacao + remover slice |
+| Migration SQL | `UPDATE tenants SET slug = 'marq'` |
 
