@@ -803,19 +803,7 @@ const ChatWidget = () => {
       resolution_status: null,
     }).eq("id", reopenRoomId);
 
-    // Increment attendant's active_conversations
-    if (roomData?.attendant_id) {
-      const { data: att } = await supabase
-        .from("attendant_profiles")
-        .select("active_conversations")
-        .eq("id", roomData.attendant_id)
-        .maybeSingle();
-      if (att) {
-        await supabase.from("attendant_profiles").update({
-          active_conversations: (att.active_conversations ?? 0) + 1,
-        }).eq("id", roomData.attendant_id);
-      }
-    }
+    // NOTE: active_conversations is handled by the resync_attendant_counter_on_room_change trigger
 
     // System message with chain_reset metadata
     await supabase.from("chat_messages").insert({
