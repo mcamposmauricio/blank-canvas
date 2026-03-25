@@ -1,62 +1,38 @@
 
 
-# Plano: Corrigir historico de chats antigos no widget
+# Plano: Mapear atendentes nos 548 rooms importados
 
-## Problema
+## Situacao
 
-Dois problemas combinados impedem a visualizacao do historico:
+548 rooms fechados com `attendant_id = NULL`. A migration aprovada anteriormente para corrigir isso nunca foi criada como arquivo. Os dados nas mensagens permitem mapear:
 
-### 1. Widget nao mostra historico para visitantes que retornam via token salvo
+- Lucas (134 rooms) → `4873662b-2c67-475f-b8ce-c7bd3d902ee3`
+- Felipe (132 rooms) → `8799798f-20b1-44c1-9313-231e69d578e8`
+- Matheus (99 rooms) → `b15cea0b-ec10-462d-8dc3-8e553f42b1a1`
+- Ana (91 rooms) → `20d1df9d-b67a-4fa4-a7af-d625627ab5e0`
+- Sem mapeamento: chuckzera (33), alexandre ando (3), thainá (1), sem mensagem (~55) = ~92 rooms
 
-No `ChatWidget.tsx` (linhas 353-380), quando um visitante retorna com `visitor_token` salvo no localStorage e nao tem room ativo, o codigo nao faz nada — o `phase` permanece em `"form"`. O visitante ve o formulario de novo em vez do historico.
+## Execucao (1 migration SQL)
 
-Comparacao: quando o visitante vem via `paramVisitorToken` + `isResolvedVisitor` (linhas 310-324), o codigo corretamente faz `setPhase("history")`. Mas o branch do `savedToken` (linha 344) nao tem essa logica.
+### Passo 1 — Mapear 456 rooms pelo sender_name das mensagens
 
-**Correcao em `src/pages/ChatWidget.tsx` (linhas 353-380):**
+UPDATE `chat_rooms.attendant_id` usando a primeira mensagem de atendente com nome conhecido (Felipe, Lucas, Ana, Matheus).
 
-Apos encontrar o visitor pelo token salvo e verificar que nao ha room ativo, checar se existem rooms fechados. Se sim, ir para `phase = "history"`. Se nao, ficar em `"form"`.
+### Passo 2 — Distribuir os ~92 rooms restantes em round-robin
 
-```
-if (visitor) {
-  setVisitorId(visitor.id);
-  // Check active rooms
-  const { data: room } = await supabase...
-  if (room) {
-    // existing logic for active/waiting
-  } else {
-    // NEW: check for any closed rooms (history)
-    const { count } = await supabase
-      .from("chat_rooms")
-      .select("id", { count: "exact", head: true })
-      .eq("visitor_id", visitor.id);
-    if ((count || 0) > 0) {
-      setPhase("history");
-    }
-  }
-}
-```
+Rooms sem atendente mapeavel (chuckzera, alexandre, thainá, sem mensagens) serao distribuidos igualmente entre os 4 atendentes.
 
-### 2. Visitantes duplicados da migracao
+### Passo 3 — Preencher sender_id nas mensagens
 
-A migracao criou novos visitors com novos `visitor_token`s. Se um visitante ja tinha um token no localStorage (de antes da migracao), ele encontra o visitor antigo (pre-migracao, sem rooms). Os rooms importados estao vinculados ao visitor importado (diferente).
+UPDATE `chat_messages.sender_id` onde `sender_type = 'attendant'` e `sender_id IS NULL`, mapeando `sender_name` para o `user_id` correspondente.
 
-**Correcao no `resolve-chat-visitor/index.ts` (funcao `findOrCreateVisitor`):**
+### Passo 4 — Recalcular contadores
 
-Quando encontra um visitor por `company_contact_id` (linha 432-436), usar `.limit(1)` e ordenar por rooms existentes. Mas a solucao mais robusta e um script de consolidacao:
-
-**Script de consolidacao de visitors duplicados (execucao direta no banco):**
-
-Para cada `company_contact_id` com mais de 1 visitor:
-1. Escolher o visitor que tem mais rooms como "primario"
-2. UPDATE todos os `chat_rooms` dos visitors secundarios para apontar ao primario
-3. DELETE os visitors secundarios
-
-Isso garante que todo o historico fica sob um unico visitor.
+Recalcular `active_conversations` em `attendant_profiles`.
 
 ## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/pages/ChatWidget.tsx` | Adicionar `setPhase("history")` no branch do savedToken quando ha rooms fechados |
-| Script SQL (execucao direta) | Consolidar visitors duplicados por `company_contact_id` |
+| Nova migration SQL | Mapear attendant_id nos rooms + sender_id nas mensagens + round-robin dos restantes |
 
