@@ -148,7 +148,7 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
     if (resyncTimerRef.current) clearTimeout(resyncTimerRef.current);
     resyncTimerRef.current = setTimeout(() => {
       resyncCounts();
-    }, 1000);
+    }, 5000);
   }, [resyncCounts]);
 
   const handleRoomChange = useCallback(() => {
