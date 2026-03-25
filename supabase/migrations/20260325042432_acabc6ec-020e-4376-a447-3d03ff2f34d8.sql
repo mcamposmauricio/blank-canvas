@@ -1,0 +1,1 @@
+UPDATE tenants SET slug = 'marq' WHERE id = 'eee96b59-d7da-45cf-93f1-e3ab0796e678' AND slug = 'marq-hr';

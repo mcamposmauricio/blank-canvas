@@ -599,133 +599,135 @@ export function ChatInput({ onSend, roomId, senderName }: ChatInputProps) {
         </div>
       )}
 
-      <div className="flex gap-2 items-end flex-wrap min-w-0">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="shrink-0 h-7 w-7 rounded text-xs font-bold"
-          onClick={handleBoldToggle}
-          title="Negrito (Ctrl+B)"
-          type="button"
-        >
-          B
-        </Button>
-        <Button
-          size="icon"
-          variant={isInternal ? "default" : "ghost"}
-          className="shrink-0 h-9 w-9"
-          onClick={() => setIsInternal(!isInternal)}
-          title={`${t("chat.workspace.toggle_internal")} (Ctrl+Shift+I)`}
-        >
-          <Eye className="h-4 w-4" />
-        </Button>
+      <div className="flex flex-col gap-1 min-w-0">
+        <div className="flex gap-2 items-end">
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={handleChange}
+            onPaste={handlePaste}
+            placeholder={isInternal ? t("chat.workspace.internal_placeholder") : t("chat.workspace.message_placeholder")}
+            onKeyDown={handleKeyDown}
+            disabled={sending}
+            rows={1}
+            className="min-h-[36px] max-h-[200px] resize-none py-2 flex-1"
+          />
+          <Button
+            size="icon"
+            className="shrink-0 h-9 w-9"
+            onClick={handleSend}
+            disabled={(!value.trim() && !pendingFile) || sending || uploading}
+          >
+            {sending || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+        <div className="flex gap-1 items-center flex-wrap">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="shrink-0 h-7 w-7 rounded text-xs font-bold"
+            onClick={handleBoldToggle}
+            title="Negrito (Ctrl+B)"
+            type="button"
+          >
+            B
+          </Button>
+          <Button
+            size="icon"
+            variant={isInternal ? "default" : "ghost"}
+            className="shrink-0 h-7 w-7"
+            onClick={() => setIsInternal(!isInternal)}
+            title={`${t("chat.workspace.toggle_internal")} (Ctrl+Shift+I)`}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFileSelect(file);
-          }}
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="shrink-0 h-9 w-9"
-          onClick={() => fileInputRef.current?.click()}
-          title="Anexar arquivo"
-          disabled={uploading}
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileSelect(file);
+            }}
+          />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="shrink-0 h-7 w-7"
+            onClick={() => fileInputRef.current?.click()}
+            title="Anexar arquivo"
+            disabled={uploading}
+          >
+            <Paperclip className="h-3.5 w-3.5" />
+          </Button>
 
-        <EmojiPicker onSelect={handleEmojiSelect} />
+          <EmojiPicker onSelect={handleEmojiSelect} />
 
-        <Popover open={false}>
-          <PopoverTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="shrink-0 h-9 w-9"
-              onClick={() => {
-                // Insert "/" at cursor position
-                const el = textareaRef.current;
-                if (el) {
-                  const start = el.selectionStart;
-                  const newVal = value.slice(0, start) + "/" + value.slice(start);
-                  setValue(newVal);
-                  slashPosRef.current = start;
-                  setMacroFilter("");
-                  setMacrosOpen(true);
-                  setTimeout(() => {
-                    el.focus();
-                    el.setSelectionRange(start + 1, start + 1);
-                  }, 0);
-                } else {
-                  setValue(value + "/");
-                  setMacrosOpen(true);
-                }
-              }}
-              title="Macros (digite /)"
-            >
-              <Zap className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-        </Popover>
+          <Popover open={false}>
+            <PopoverTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="shrink-0 h-7 w-7"
+                onClick={() => {
+                  const el = textareaRef.current;
+                  if (el) {
+                    const start = el.selectionStart;
+                    const newVal = value.slice(0, start) + "/" + value.slice(start);
+                    setValue(newVal);
+                    slashPosRef.current = start;
+                    setMacroFilter("");
+                    setMacrosOpen(true);
+                    setTimeout(() => {
+                      el.focus();
+                      el.setSelectionRange(start + 1, start + 1);
+                    }, 0);
+                  } else {
+                    setValue(value + "/");
+                    setMacrosOpen(true);
+                  }
+                }}
+                title="Macros (digite /)"
+              >
+                <Zap className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+          </Popover>
 
-        <Button
-          size="icon"
-          variant="ghost"
-          className="shrink-0 h-9 w-9"
-          onClick={handleOpenArticles}
-          title={t("chat.articles.title")}
-        >
-          <BookOpen className="h-4 w-4" />
-        </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="shrink-0 h-7 w-7"
+            onClick={handleOpenArticles}
+            title={t("chat.articles.title")}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+          </Button>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="shrink-0 h-9 w-9"
-              title="Atalhos de teclado"
-            >
-              <Keyboard className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-56 p-3" align="start" side="top">
-            <p className="text-xs font-semibold mb-2">Atalhos de teclado</p>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between"><span>Enviar mensagem</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Enter</kbd></div>
-              <div className="flex justify-between"><span>Nova linha</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Shift+Enter</kbd></div>
-              <div className="flex justify-between"><span>Negrito</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+B</kbd></div>
-              <div className="flex justify-between"><span>Nota interna</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+Shift+I</kbd></div>
-              <div className="flex justify-between"><span>Macros</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">/</kbd></div>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleChange}
-          onPaste={handlePaste}
-          placeholder={isInternal ? t("chat.workspace.internal_placeholder") : t("chat.workspace.message_placeholder")}
-          onKeyDown={handleKeyDown}
-          disabled={sending}
-          rows={1}
-          className="min-h-[36px] max-h-[200px] resize-none py-2"
-        />
-        <Button
-          size="icon"
-          className="shrink-0 h-9 w-9"
-          onClick={handleSend}
-          disabled={(!value.trim() && !pendingFile) || sending || uploading}
-        >
-          {sending || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="shrink-0 h-7 w-7"
+                title="Atalhos de teclado"
+              >
+                <Keyboard className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-3" align="start" side="top">
+              <p className="text-xs font-semibold mb-2">Atalhos de teclado</p>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between"><span>Enviar mensagem</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Enter</kbd></div>
+                <div className="flex justify-between"><span>Nova linha</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Shift+Enter</kbd></div>
+                <div className="flex justify-between"><span>Negrito</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+B</kbd></div>
+                <div className="flex justify-between"><span>Nota interna</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+Shift+I</kbd></div>
+                <div className="flex justify-between"><span>Macros</span><kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">/</kbd></div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
     </div>
   );

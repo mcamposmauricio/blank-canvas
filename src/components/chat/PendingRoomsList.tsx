@@ -5,6 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+const PAGE_SIZE = 20;
 
 interface PendingRoom {
   id: string;
@@ -22,21 +25,28 @@ interface PendingRoomsListProps {
 
 export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: PendingRoomsListProps) {
   const [rooms, setRooms] = useState<PendingRoom[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0);
   const [open, setOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchPendingRooms = useCallback(async () => {
+  const fetchPendingRooms = useCallback(async (pageNum = 0, append = false) => {
     if (!attendantId) return;
 
-    const { data } = await supabase
+    const from = pageNum * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, count } = await supabase
       .from("chat_rooms")
-      .select("id, visitor_id, closed_at, chat_visitors!visitor_id(name)")
+      .select("id, visitor_id, closed_at, chat_visitors!visitor_id(name)", { count: "exact" })
       .eq("status", "closed")
       .eq("resolution_status", "pending")
       .eq("attendant_id", attendantId)
-      .order("closed_at", { ascending: false });
+      .order("closed_at", { ascending: false })
+      .range(from, to);
 
-    if (!data) { setRooms([]); return; }
+    if (count !== null) setTotalCount(count);
+    if (!data) { if (!append) setRooms([]); return; }
 
     const roomIds = data.map((r: any) => r.id);
     let lastMessages: Record<string, string> = {};
@@ -60,17 +70,20 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: 
       }
     }
 
-    setRooms(data.map((r: any) => ({
+    const mapped = data.map((r: any) => ({
       id: r.id,
       visitor_id: r.visitor_id,
       visitor_name: r.chat_visitors?.name ?? "Visitante",
       closed_at: r.closed_at,
       last_message: lastMessages[r.id] ?? null,
-    })));
+    }));
+
+    setRooms(prev => append ? [...prev, ...mapped] : mapped);
   }, [attendantId]);
 
   useEffect(() => {
-    fetchPendingRooms();
+    setPage(0);
+    fetchPendingRooms(0);
     if (!attendantId) return;
 
     const channel = supabase
@@ -80,7 +93,10 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: 
         { event: "*", schema: "public", table: "chat_rooms" },
         () => {
           if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(fetchPendingRooms, 3000);
+          debounceRef.current = setTimeout(() => {
+            setPage(0);
+            fetchPendingRooms(0);
+          }, 3000);
         }
       )
       .subscribe();
@@ -91,7 +107,15 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: 
     };
   }, [attendantId, fetchPendingRooms]);
 
-  if (rooms.length === 0) return null;
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchPendingRooms(nextPage, true);
+  };
+
+  if (totalCount === 0 && rooms.length === 0) return null;
+
+  const hasMore = rooms.length < totalCount;
 
   return (
     <div className="px-1 mb-2">
@@ -101,33 +125,45 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: 
           <AlertCircle className="h-3.5 w-3.5 text-warning" />
           <span className="font-medium text-xs text-muted-foreground">Com Pendência</span>
           <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 min-w-[18px] justify-center">
-            {rooms.length}
+            {totalCount}
           </Badge>
         </CollapsibleTrigger>
-        <CollapsibleContent className="mt-1 space-y-0.5">
-          {rooms.map((room) => (
-            <button
-              key={room.id}
-              onClick={() => onSelectRoom(room.id)}
-              className={`w-full text-left px-2 py-2 rounded-md text-xs transition-colors ${
-                selectedRoomId === room.id
-                  ? "bg-primary/10 border border-primary/20"
-                  : "hover:bg-muted/50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium truncate">{room.visitor_name}</span>
-                {room.closed_at && (
-                  <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
-                    {formatDistanceToNow(new Date(room.closed_at), { addSuffix: true, locale: ptBR })}
-                  </span>
-                )}
-              </div>
-              {room.last_message && (
-                <p className="text-muted-foreground truncate mt-0.5">{room.last_message.slice(0, 60)}</p>
+        <CollapsibleContent className="mt-1">
+          <ScrollArea className="max-h-[300px]">
+            <div className="space-y-0.5">
+              {rooms.map((room) => (
+                <button
+                  key={room.id}
+                  onClick={() => onSelectRoom(room.id)}
+                  className={`w-full text-left px-2 py-2 rounded-md text-xs transition-colors ${
+                    selectedRoomId === room.id
+                      ? "bg-primary/10 border border-primary/20"
+                      : "hover:bg-muted/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium truncate">{room.visitor_name}</span>
+                    {room.closed_at && (
+                      <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+                        {formatDistanceToNow(new Date(room.closed_at), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    )}
+                  </div>
+                  {room.last_message && (
+                    <p className="text-muted-foreground truncate mt-0.5">{room.last_message}</p>
+                  )}
+                </button>
+              ))}
+              {hasMore && (
+                <button
+                  onClick={handleLoadMore}
+                  className="w-full text-center py-1.5 text-xs text-primary hover:underline"
+                >
+                  Carregar mais ({totalCount - rooms.length} restantes)
+                </button>
               )}
-            </button>
-          ))}
+            </div>
+          </ScrollArea>
         </CollapsibleContent>
       </Collapsible>
     </div>
