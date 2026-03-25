@@ -158,16 +158,14 @@ export function useChatMessages(roomId: string | null) {
   return { messages, loading, hasMore, loadingMore, loadMore, refetch: fetchMessages };
 }
 
-export function useChatRooms(ownerUserId: string | null, options?: { excludeClosed?: boolean; soundEnabled?: boolean }) {
+export function useChatRooms(ownerUserId: string | null, options?: { excludeClosed?: boolean; soundEnabled?: boolean; tenantId?: string | null }) {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [loading, setLoading] = useState(false);
   const selectedRoomIdRef = useRef<string | null>(null);
   const initialLoadDone = useRef(false);
-  // Capture options in a ref so callbacks always have fresh values
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  // ─── fetchSingleRoom: mini-fetch sem loading, para novos rooms ────────────
   const fetchSingleRoom = useCallback(async (roomId: string) => {
     const { data } = await supabase
       .from("chat_rooms")
@@ -186,16 +184,14 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
     };
 
     setRooms((prev) => {
-      const filtered = prev.filter((r) => r.id !== roomId); // deduplicar
+      const filtered = prev.filter((r) => r.id !== roomId);
       return [enriched, ...filtered].sort(SORT_ROOMS);
     });
   }, []);
 
-  // ─── fetchRooms: loading=true APENAS no primeiro load ────────────────────
   const fetchRooms = useCallback(
     async (showLoading = false) => {
       if (!ownerUserId) return;
-      // Only show loading spinner on the very first load — never again
       if (showLoading && !initialLoadDone.current) setLoading(true);
 
       let query = supabase
@@ -221,7 +217,6 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
       let unreadCounts: Record<string, number> = {};
 
       if (roomIds.length > 0) {
-        // Fetch last message per room via RPC (1 row per room instead of all messages)
         const { data: msgs } = await supabase.rpc("get_last_messages_for_rooms", {
           p_room_ids: roomIds,
         });
@@ -232,7 +227,6 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
           }
         }
 
-        // Fetch read timestamps
         const { data: reads } = await supabase
           .from("chat_room_reads")
           .select("room_id, last_read_at")
@@ -246,7 +240,6 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
           }
         }
 
-        // ── Otimização: 1 query única para todos os unreads (em vez de N queries) ──
         const oldestReadAt =
           Object.values(readMap).length > 0
             ? Object.values(readMap).reduce((a, b) => (a < b ? a : b))
@@ -291,45 +284,52 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
   );
 
   useEffect(() => {
-    // Apenas o primeiro fetch mostra o spinner
     fetchRooms(true);
 
     if (!ownerUserId) return;
 
-    // ── Canal: chat_rooms — patches individuais por evento ─────────────────
+    const tenantId = optionsRef.current?.tenantId;
+
+    // ── Canal: chat_rooms — filtered by tenant_id when available ─────────
     const roomsChannel = supabase
       .channel("chat-rooms-updates")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_rooms" },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_rooms",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         (payload) => {
           const newRoom = payload.new as ChatRoom;
-          // Se excludeClosed e o room entrou como closed, ignorar
           if (optionsRef.current?.excludeClosed && newRoom.status === "closed") return;
           fetchSingleRoom(newRoom.id);
         }
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "chat_rooms" },
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_rooms",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         (payload) => {
           const updated = payload.new as ChatRoom;
 
           setRooms((prev) => {
             const idx = prev.findIndex((r) => r.id === updated.id);
 
-            // Room passou para closed com excludeClosed=true → remover
             if (optionsRef.current?.excludeClosed && updated.status === "closed") {
               return prev.filter((r) => r.id !== updated.id);
             }
 
             if (idx === -1) {
-              // Room não estava na lista mas agora é active/waiting → adicionar
               fetchSingleRoom(updated.id);
               return prev;
             }
 
-            // Patch cirúrgico: preservar campos enriquecidos, atualizar campos do banco
             const patched = [...prev];
             patched[idx] = {
               ...patched[idx],
@@ -339,7 +339,6 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
               assigned_at: updated.assigned_at,
               closed_at: updated.closed_at,
               updated_at: updated.updated_at,
-              // Preservar campos calculados localmente:
               visitor_name: patched[idx].visitor_name,
               visitor_email: patched[idx].visitor_email,
               last_message: patched[idx].last_message,
@@ -353,7 +352,12 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "chat_rooms" },
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "chat_rooms",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         (payload) => {
           const deletedId = (payload.old as { id: string }).id;
           setRooms((prev) => prev.filter((r) => r.id !== deletedId));
@@ -361,74 +365,91 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
       )
       .subscribe();
 
-    // ── Canal: chat_messages — patch cirúrgico sem fetchRooms ──────────────
-    const msgChannel = supabase
-      .channel("chat-messages-notification")
+    // ── Canal: chat_rooms updated_at changes → detect new messages without global chat_messages listener ──
+    // When a room's updated_at changes, it means a new message arrived.
+    // This replaces the previous global chat_messages listener.
+    const roomActivityChannel = supabase
+      .channel("chat-room-activity")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_messages" },
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_rooms",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         (payload) => {
-          const msg = payload.new as ChatMessage;
+          const updated = payload.new as ChatRoom & { updated_at: string };
+          const old = payload.old as ChatRoom & { updated_at: string };
 
-          // Som de notificação apenas para mensagens do visitante em rooms não selecionados
-          if (msg.sender_type === "visitor" && msg.room_id !== selectedRoomIdRef.current) {
-            if (optionsRef.current?.soundEnabled !== false) {
-              try {
-                const audio = new Audio(
-                  "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
-                );
-                audio.volume = 0.3;
-                audio.play().catch(() => {});
-              } catch {}
-            }
+          // Only process if updated_at actually changed (indicates message activity)
+          if (updated.updated_at === old.updated_at) return;
 
-            // Browser notification when tab is not focused
-            if (document.hidden && "Notification" in window && Notification.permission === "granted") {
-              const room = rooms.find((r) => r.id === msg.room_id);
-              const visitorName = room?.visitor_name || msg.sender_name || "Visitante";
-              new Notification(`Nova mensagem de ${visitorName}`, {
-                body: msg.content.slice(0, 100),
-                icon: "/logo-icon-dark.svg",
-                tag: `chat-${msg.room_id}`,
+          // Fetch last message for this room to update sidebar
+          supabase
+            .from("chat_messages")
+            .select("content, sender_type, is_internal, sender_name, created_at, room_id")
+            .eq("room_id", updated.id)
+            .eq("is_internal", false)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .then(({ data: msgs }) => {
+              if (!msgs || msgs.length === 0) return;
+              const msg = msgs[0];
+
+              // Sound notification for visitor messages on non-selected rooms
+              if (msg.sender_type === "visitor" && msg.room_id !== selectedRoomIdRef.current) {
+                if (optionsRef.current?.soundEnabled !== false) {
+                  try {
+                    const audio = new Audio(
+                      "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
+                    );
+                    audio.volume = 0.3;
+                    audio.play().catch(() => {});
+                  } catch {}
+                }
+
+                if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+                  const room = rooms.find((r) => r.id === msg.room_id);
+                  const visitorName = room?.visitor_name || msg.sender_name || "Visitante";
+                  new Notification(`Nova mensagem de ${visitorName}`, {
+                    body: msg.content.slice(0, 100),
+                    icon: "/logo-icon-dark.svg",
+                    tag: `chat-${msg.room_id}`,
+                  });
+                }
+              }
+
+              // Update room in list
+              setRooms((prev) => {
+                const idx = prev.findIndex((r) => r.id === msg.room_id);
+                if (idx === -1) return prev;
+
+                const patched = [...prev];
+                const room = { ...patched[idx] };
+
+                room.last_message = msg.content;
+                room.last_message_at = msg.created_at;
+                room.last_message_sender_type = msg.sender_type;
+
+                if (
+                  msg.sender_type === "visitor" &&
+                  msg.room_id !== selectedRoomIdRef.current
+                ) {
+                  room.unread_count = (room.unread_count ?? 0) + 1;
+                }
+
+                patched[idx] = room;
+                return [...patched].sort(SORT_ROOMS);
               });
-            }
-          }
-
-          // ── Atualização cirúrgica do estado — SEM fetchRooms, SEM loading ──
-          setRooms((prev) => {
-            const idx = prev.findIndex((r) => r.id === msg.room_id);
-            if (idx === -1) return prev; // room não está na lista
-
-            const patched = [...prev];
-            const room = { ...patched[idx] };
-
-            // Atualizar last_message para qualquer mensagem não-interna
-            if (!msg.is_internal) {
-              room.last_message = msg.content;
-              room.last_message_at = msg.created_at;
-              room.last_message_sender_type = msg.sender_type;
-            }
-
-            // Incrementar unread APENAS para mensagens do visitante
-            // Mensagens do atendente (sender_type="attendant") ou sistema NUNCA incrementam
-            if (
-              msg.sender_type === "visitor" &&
-              !msg.is_internal &&
-              msg.room_id !== selectedRoomIdRef.current
-            ) {
-              room.unread_count = (room.unread_count ?? 0) + 1;
-            }
-
-            patched[idx] = room;
-            return [...patched].sort(SORT_ROOMS);
-          });
+            });
         }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(roomsChannel);
-      supabase.removeChannel(msgChannel);
+      supabase.removeChannel(roomActivityChannel);
     };
   }, [ownerUserId, fetchRooms, fetchSingleRoom]);
 
@@ -444,7 +465,6 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
           { onConflict: "room_id,user_id" }
         );
 
-      // Zerar unread localmente sem refetch
       setRooms((prev) =>
         prev.map((r) => (r.id === roomId ? { ...r, unread_count: 0 } : r))
       );
@@ -459,26 +479,23 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
   return { rooms, loading, refetch: fetchRooms, markRoomAsRead, setSelectedRoomRef };
 }
 
-export function useAttendantQueues() {
+export function useAttendantQueues(tenantId?: string | null) {
   const [attendants, setAttendants] = useState<AttendantQueue[]>([]);
   const [unassignedRooms, setUnassignedRooms] = useState<UnassignedRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchQueues = useCallback(async () => {
-    // Use active_conversations from attendant_profiles instead of counting rooms
     const { data: profiles } = await supabase
       .from("attendant_profiles")
       .select("id, user_id, display_name, status, max_conversations, active_conversations");
 
-    // Only fetch unassigned + waiting rooms (lighter query — no need for ALL rooms)
     const { data: unassignedData } = await supabase
       .from("chat_rooms")
       .select("id, attendant_id, status, visitor_id, created_at, chat_visitors!visitor_id(name)")
       .in("status", ["active", "waiting"])
       .is("attendant_id", null);
 
-    // Fetch waiting counts per attendant (only waiting rooms with an attendant)
     const { data: waitingData } = await supabase
       .from("chat_rooms")
       .select("attendant_id")
@@ -522,7 +539,6 @@ export function useAttendantQueues() {
   useEffect(() => {
     fetchQueues();
 
-    // Debounced realtime: batch rapid changes with 3s debounce
     const debouncedFetch = () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
@@ -530,16 +546,28 @@ export function useAttendantQueues() {
       }, 3000);
     };
 
+    // Only listen to attendant_profiles — room changes are handled by the
+    // COUNT-based trigger which updates attendant_profiles.active_conversations
     const channel = supabase
       .channel("attendant-queues-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "chat_rooms" },
+        {
+          event: "*",
+          schema: "public",
+          table: "attendant_profiles",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         debouncedFetch
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "attendant_profiles" },
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_rooms",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         debouncedFetch
       )
       .subscribe();
@@ -548,7 +576,7 @@ export function useAttendantQueues() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [fetchQueues]);
+  }, [fetchQueues, tenantId]);
 
   return { attendants, unassignedRooms, loading, refetch: fetchQueues };
 }
