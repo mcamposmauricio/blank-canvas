@@ -3221,6 +3221,7 @@ export type Database = {
         Args: { p_room_ids: string[] }
         Returns: {
           content: string
+          created_at: string
           room_id: string
           sender_type: string
         }[]

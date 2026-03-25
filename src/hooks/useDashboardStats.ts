@@ -79,7 +79,7 @@ function computeDateRange(filters: DashboardFilters): { startDate: string | null
   return { startDate, endDate };
 }
 
-export function useDashboardStats(filters: DashboardFilters) {
+export function useDashboardStats(filters: DashboardFilters, tenantId?: string | null) {
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
   const [realtimeEnabled, setRealtimeEnabled] = useState(false);
@@ -338,13 +338,13 @@ export function useDashboardStats(filters: DashboardFilters) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => { fetchStats(); }, 5000);
     };
-    const channel = supabase.channel("dashboard-realtime-rooms").on("postgres_changes", { event: "*", schema: "public", table: "chat_rooms" }, debouncedFetch).subscribe();
+    const channel = supabase.channel("dashboard-realtime-rooms").on("postgres_changes", { event: "*", schema: "public", table: "chat_rooms", ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}) }, debouncedFetch).subscribe();
     channelRef.current = channel;
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel); channelRef.current = null;
     };
-  }, [realtimeEnabled, fetchStats]);
+  }, [realtimeEnabled, fetchStats, tenantId]);
 
   return { stats, loading, refetch: fetchStats, realtimeEnabled, toggleRealtime };
 }

@@ -222,8 +222,8 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
         });
 
         if (msgs) {
-          for (const m of msgs as { room_id: string; content: string; sender_type: string }[]) {
-            lastMessages[m.room_id] = { content: m.content, created_at: "", sender_type: m.sender_type };
+          for (const m of msgs as { room_id: string; content: string; sender_type: string; created_at: string }[]) {
+            lastMessages[m.room_id] = { content: m.content, created_at: m.created_at ?? "", sender_type: m.sender_type };
           }
         }
 
@@ -363,13 +363,6 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
           setRooms((prev) => prev.filter((r) => r.id !== deletedId));
         }
       )
-      .subscribe();
-
-    // ── Canal: chat_rooms updated_at changes → detect new messages without global chat_messages listener ──
-    // When a room's updated_at changes, it means a new message arrived.
-    // This replaces the previous global chat_messages listener.
-    const roomActivityChannel = supabase
-      .channel("chat-room-activity")
       .on(
         "postgres_changes",
         {
@@ -382,74 +375,72 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
           const updated = payload.new as ChatRoom & { updated_at: string };
           const old = payload.old as ChatRoom & { updated_at: string };
 
-          // Only process if updated_at actually changed (indicates message activity)
-          if (updated.updated_at === old.updated_at) return;
+          // Only fetch last message if updated_at changed (indicates message activity)
+          if (updated.updated_at !== old.updated_at) {
+            supabase
+              .from("chat_messages")
+              .select("content, sender_type, is_internal, sender_name, created_at, room_id")
+              .eq("room_id", updated.id)
+              .eq("is_internal", false)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .then(({ data: msgs }) => {
+                if (!msgs || msgs.length === 0) return;
+                const msg = msgs[0];
 
-          // Fetch last message for this room to update sidebar
-          supabase
-            .from("chat_messages")
-            .select("content, sender_type, is_internal, sender_name, created_at, room_id")
-            .eq("room_id", updated.id)
-            .eq("is_internal", false)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .then(({ data: msgs }) => {
-              if (!msgs || msgs.length === 0) return;
-              const msg = msgs[0];
+                // Sound notification for visitor messages on non-selected rooms
+                if (msg.sender_type === "visitor" && msg.room_id !== selectedRoomIdRef.current) {
+                  if (optionsRef.current?.soundEnabled !== false) {
+                    try {
+                      const audio = new Audio(
+                        "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
+                      );
+                      audio.volume = 0.3;
+                      audio.play().catch(() => {});
+                    } catch {}
+                  }
 
-              // Sound notification for visitor messages on non-selected rooms
-              if (msg.sender_type === "visitor" && msg.room_id !== selectedRoomIdRef.current) {
-                if (optionsRef.current?.soundEnabled !== false) {
-                  try {
-                    const audio = new Audio(
-                      "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
-                    );
-                    audio.volume = 0.3;
-                    audio.play().catch(() => {});
-                  } catch {}
+                  if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+                    const room = rooms.find((r) => r.id === msg.room_id);
+                    const visitorName = room?.visitor_name || msg.sender_name || "Visitante";
+                    new Notification(`Nova mensagem de ${visitorName}`, {
+                      body: msg.content.slice(0, 100),
+                      icon: "/logo-icon-dark.svg",
+                      tag: `chat-${msg.room_id}`,
+                    });
+                  }
                 }
 
-                if (document.hidden && "Notification" in window && Notification.permission === "granted") {
-                  const room = rooms.find((r) => r.id === msg.room_id);
-                  const visitorName = room?.visitor_name || msg.sender_name || "Visitante";
-                  new Notification(`Nova mensagem de ${visitorName}`, {
-                    body: msg.content.slice(0, 100),
-                    icon: "/logo-icon-dark.svg",
-                    tag: `chat-${msg.room_id}`,
-                  });
-                }
-              }
+                // Update room in list
+                setRooms((prev) => {
+                  const idx = prev.findIndex((r) => r.id === msg.room_id);
+                  if (idx === -1) return prev;
 
-              // Update room in list
-              setRooms((prev) => {
-                const idx = prev.findIndex((r) => r.id === msg.room_id);
-                if (idx === -1) return prev;
+                  const patched = [...prev];
+                  const room = { ...patched[idx] };
 
-                const patched = [...prev];
-                const room = { ...patched[idx] };
+                  room.last_message = msg.content;
+                  room.last_message_at = msg.created_at;
+                  room.last_message_sender_type = msg.sender_type;
 
-                room.last_message = msg.content;
-                room.last_message_at = msg.created_at;
-                room.last_message_sender_type = msg.sender_type;
+                  if (
+                    msg.sender_type === "visitor" &&
+                    msg.room_id !== selectedRoomIdRef.current
+                  ) {
+                    room.unread_count = (room.unread_count ?? 0) + 1;
+                  }
 
-                if (
-                  msg.sender_type === "visitor" &&
-                  msg.room_id !== selectedRoomIdRef.current
-                ) {
-                  room.unread_count = (room.unread_count ?? 0) + 1;
-                }
-
-                patched[idx] = room;
-                return [...patched].sort(SORT_ROOMS);
+                  patched[idx] = room;
+                  return [...patched].sort(SORT_ROOMS);
+                });
               });
-            });
+          }
         }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(roomsChannel);
-      supabase.removeChannel(roomActivityChannel);
     };
   }, [ownerUserId, fetchRooms, fetchSingleRoom]);
 
@@ -556,16 +547,6 @@ export function useAttendantQueues(tenantId?: string | null) {
           event: "*",
           schema: "public",
           table: "attendant_profiles",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        debouncedFetch
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_rooms",
           ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
         },
         debouncedFetch
