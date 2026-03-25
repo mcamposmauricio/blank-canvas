@@ -375,6 +375,15 @@ const ChatWidget = () => {
               } else {
                 setPhase("waiting");
               }
+            } else {
+              // No active room — check if there are any closed rooms (history)
+              const { count } = await supabase
+                .from("chat_rooms")
+                .select("id", { count: "exact", head: true })
+                .eq("visitor_id", visitor.id);
+              if ((count || 0) > 0) {
+                setPhase("history");
+              }
             }
           }
         }
