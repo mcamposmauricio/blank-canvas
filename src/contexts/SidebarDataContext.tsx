@@ -33,7 +33,6 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
   const otherTeamsTotalChats = otherTeamAttendants.reduce((sum, a) => sum + a.active_count, 0);
 
   const initializeData = useCallback(async (userId: string, adminStatus: boolean, currentTenantId?: string | null, masterImpersonating?: boolean) => {
-    // Consolidated: fetch ALL attendants + ALL team members in 2 parallel queries
     let attQuery = supabase
       .from("attendant_profiles")
       .select("id, display_name, user_id, status, active_conversations");
@@ -48,17 +47,14 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
     const attendantsList = allAttendants ?? [];
     const teamMembersList = allTeamMembers ?? [];
 
-    // Find my profile from the already-fetched list
     const myProfile = attendantsList.find((a: any) => a.user_id === userId);
 
     let attendants: any[] = [];
     let otherAttendants: any[] = [];
 
     if (masterImpersonating || (adminStatus && !myProfile)) {
-      // Admin/master without profile: show all
       attendants = attendantsList;
     } else if (myProfile) {
-      // Find my teams from the already-fetched team members
       const myTeamIds = new Set(
         teamMembersList.filter((m: any) => m.attendant_id === myProfile.id).map((m: any) => m.team_id)
       );
@@ -121,7 +117,6 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
     initializedForRef.current = userId + (currentTenantId ?? '');
   }, []);
 
-  // Resync counts from the database (always accurate thanks to COUNT-based trigger)
   const resyncCounts = useCallback(async () => {
     const { count: unassigned } = await supabase
       .from("chat_rooms")
@@ -148,7 +143,6 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
     }
   }, [teamAttendants, otherTeamAttendants]);
 
-  // Debounced resync: triggers on any room change instead of incremental patches
   const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedResync = useCallback(() => {
     if (resyncTimerRef.current) clearTimeout(resyncTimerRef.current);
@@ -194,7 +188,6 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
     applyToSetter(setOtherTeamAttendants);
   }, []);
 
-  // Refs for stable values used inside effects without triggering re-runs
   const isAdminRef = useRef(isAdmin);
   const isMasterRef = useRef(isMaster);
   const isImpersonatingRef = useRef(isImpersonating);
@@ -202,7 +195,6 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
   isMasterRef.current = isMaster;
   isImpersonatingRef.current = isImpersonating;
 
-  // Data initialization — depends on user.id + tenantId (stable keys)
   useEffect(() => {
     if (!user?.id) {
       setTeamAttendants([]);
@@ -221,7 +213,7 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, tenantId]);
 
-  // Realtime channels — only depend on user.id (stable, never re-created on token refresh)
+  // Realtime channels — filtered by tenant_id
   useEffect(() => {
     if (!user?.id) return;
 
@@ -229,7 +221,12 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
       .channel("global-sidebar-chat-rooms")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "chat_rooms" },
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_rooms",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         handleRoomChange
       )
       .subscribe();
@@ -238,7 +235,12 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
       .channel("global-sidebar-attendants")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "attendant_profiles" },
+        {
+          event: "*",
+          schema: "public",
+          table: "attendant_profiles",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         handleAttendantChange
       )
       .subscribe();
@@ -251,7 +253,7 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
       clearInterval(resyncInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, tenantId]);
 
   return (
     <SidebarDataContext.Provider value={{ teamAttendants, otherTeamAttendants, totalActiveChats, otherTeamsTotalChats, unassignedCount, initialized }}>

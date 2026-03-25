@@ -52,7 +52,7 @@ const AdminWorkspace = () => {
   const viewingAttendantId = searchParams.get("attendant");
   const viewingUnassigned = searchParams.get("queue") === "unassigned";
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, tenantId } = useAuth();
   const isMobile = useIsMobile();
   const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1920);
   const isTablet = !isMobile && windowWidth < 1024;
@@ -69,7 +69,7 @@ const AdminWorkspace = () => {
   const [userAttendantId, setUserAttendantId] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const { rooms, loading: roomsLoading, markRoomAsRead, setSelectedRoomRef } = useChatRooms(user?.id ?? null, { excludeClosed: true, soundEnabled });
+  const { rooms, loading: roomsLoading, markRoomAsRead, setSelectedRoomRef } = useChatRooms(user?.id ?? null, { excludeClosed: true, soundEnabled, tenantId });
   const { messages, loading: messagesLoading, hasMore, loadingMore, loadMore } = useChatMessages(selectedRoomId);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);

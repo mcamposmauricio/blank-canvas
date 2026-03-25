@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight, AlertCircle } from "lucide-react";
@@ -24,6 +25,7 @@ interface PendingRoomsListProps {
 }
 
 export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: PendingRoomsListProps) {
+  const { tenantId } = useAuth();
   const [rooms, setRooms] = useState<PendingRoom[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
@@ -90,7 +92,12 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: 
       .channel("pending-rooms-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "chat_rooms" },
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_rooms",
+          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
+        },
         () => {
           if (debounceRef.current) clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(() => {
@@ -105,7 +112,7 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: 
       if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [attendantId, fetchPendingRooms]);
+  }, [attendantId, fetchPendingRooms, tenantId]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
