@@ -148,7 +148,8 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
           <div className="flex items-center justify-between w-full">
             <button
               onClick={() => {
-                if (isAdmin || showChat) navigate("/admin/dashboard");
+                if (isMaster && !isImpersonating) navigate("/backoffice");
+                else if (isAdmin || showChat) navigate("/admin/dashboard");
                 else if (showNPS) navigate("/nps/dashboard");
                 else navigate("/nps/dashboard");
               }}
