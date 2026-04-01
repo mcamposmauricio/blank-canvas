@@ -1,68 +1,33 @@
 
 
-# Sidebar dedicado para Master Backoffice
+# Ranking de Atendentes no CSAT Report
 
-## O que muda
+## O que sera feito
 
-Quando `isMaster && !isImpersonating`, o `AppSidebar` exibe apenas itens do backoffice (Plataformas, Usuarios, Modulos, etc.) em vez do menu normal de tenant (Chat, NPS, CS, Help, Contacts). Quando impersonando, volta ao menu normal.
+Adicionar um card/secao de ranking de atendentes entre os metric cards e os graficos, mostrando uma tabela compacta com os atendentes ordenados por media CSAT, incluindo quantidade de avaliacoes e media.
 
 ## Implementacao
 
-### `AppSidebar.tsx`
+### `useCSATReport.ts`
 
-Envolver todo o conteudo do `SidebarContent` (linhas 163-556) em uma condicional:
-
-```text
-if (isMaster && !isImpersonating) {
-  → Renderizar sidebar do backoffice com items:
-    - Painel Master (/backoffice) — default tab "tenants"
-    - Plataformas (/backoffice?tab=tenants)
-    - Usuarios (/backoffice?tab=users)
-    - Modulos (/backoffice?tab=modules)
-    - Comparativo (/backoffice?tab=benchmark)
-    - Performance (/backoffice?tab=performance)
-    - Health Check (/backoffice?tab=health)
-    - Timeline (/backoffice?tab=timeline)
-    - Metricas (/backoffice?tab=metrics)
-    - Configuracoes (/backoffice?tab=settings)
-    - Operacoes (/backoffice?tab=operations)
-} else {
-  → Menu normal atual (Home, Chat, NPS, CS, Contacts, Help, Backoffice collapsible)
-}
-```
-
-Os items do sidebar master usam query params `?tab=X` para selecionar a aba no `Backoffice.tsx`.
-
-### `Backoffice.tsx`
-
-Ler `tab` da URL search params e usar como `defaultValue` do `<Tabs>`:
+Agregar dados por atendente a partir dos `rooms` ja carregados na query de stats (que ja tem `attendant_id` e `csat_score`). Calcular por atendente: media CSAT, total de avaliacoes, contagem positiva (4-5) e negativa (1-2). Adicionar ao `CSATReportStats`:
 
 ```typescript
-const [searchParams] = useSearchParams();
-const activeTab = searchParams.get("tab") || "tenants";
-// <Tabs value={activeTab} onValueChange={...}>
+attendantRanking: { attendantId: string; avgCsat: number; totalEvals: number; positiveCount: number; negativeCount: number }[]
 ```
 
-Ao trocar de tab, atualizar a URL com `setSearchParams({ tab: newTab })`.
+Resolver nomes dos atendentes fazendo uma query em `attendant_profiles` com os IDs encontrados.
 
-Remover o `PageHeader` e a `TabsList` visual (ja que a navegacao agora e pelo sidebar). Manter apenas os `TabsContent`.
+### `AdminCSATReport.tsx`
 
-### Footer do sidebar
-
-Manter o footer (perfil, tema, idioma, logout) identico para ambos os modos.
-
-### Header do sidebar
-
-Logo clica para `/backoffice` quando master (em vez de `/admin/dashboard`).
+Adicionar um `ChartCard` ou `Card` com titulo "Ranking de Atendentes" apos os metric cards e antes dos graficos. Conteudo:
+- Tabela compacta: posicao (medal icons para top 3), nome, media (com estrelas), avaliacoes, % positivo
+- Ordenado por media CSAT desc, desempate por quantidade de avaliacoes
 
 ## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/AppSidebar.tsx` | Condicional master vs tenant no SidebarContent + header click |
-| `src/pages/Backoffice.tsx` | Tabs controladas por URL params, remover TabsList visual |
-
-## Impacto em tenants
-
-Zero. A condicional `isMaster && !isImpersonating` nunca e verdadeira para usuarios de tenant.
+| `src/hooks/useCSATReport.ts` | Adicionar `attendantRanking` ao stats com agregacao por atendente |
+| `src/pages/AdminCSATReport.tsx` | Novo card de ranking entre metrics e graficos |
 
