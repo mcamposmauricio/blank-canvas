@@ -133,7 +133,8 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
           <div className="flex flex-col items-center gap-2 w-full">
             <button
               onClick={() => {
-                if (isAdmin || showChat) navigate("/admin/dashboard");
+                if (isMaster && !isImpersonating) navigate("/backoffice");
+                else if (isAdmin || showChat) navigate("/admin/dashboard");
                 else if (showNPS) navigate("/nps/dashboard");
                 else navigate("/nps/dashboard");
               }}
