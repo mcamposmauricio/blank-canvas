@@ -561,11 +561,12 @@ const ChatWidget = () => {
   }, [roomId, phase]);
 
   // Realtime subscription for proactive chats (new rooms created by attendants) and reopened rooms
+  // Merged into single channel to reduce pg_changes overhead
   useEffect(() => {
     if (!visitorId) return;
 
-    const insertChannel = supabase
-      .channel(`widget-new-rooms-${visitorId}`)
+    const visitorChannel = supabase
+      .channel(`widget-visitor-${visitorId}`)
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
@@ -612,11 +613,6 @@ const ChatWidget = () => {
           fetchHistory(visitorId);
         }
       })
-      .subscribe();
-
-    // Listen for reopened rooms (status change from closed -> active/waiting)
-    const updateChannel = supabase
-      .channel(`widget-reopen-rooms-${visitorId}`)
       .on("postgres_changes", {
         event: "UPDATE",
         schema: "public",
@@ -665,8 +661,7 @@ const ChatWidget = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(insertChannel);
-      supabase.removeChannel(updateChannel);
+      supabase.removeChannel(visitorChannel);
     };
   }, [visitorId, phase, fetchHistory, roomId]);
 
