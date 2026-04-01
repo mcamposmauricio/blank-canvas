@@ -13,7 +13,7 @@ export default function SidebarLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isWorkspaceRoute = location.pathname.startsWith("/admin/workspace");
-  const { user, loading, userDataLoading, tenantId, isAdmin, isImpersonating, impersonatedTenantName, clearImpersonation, availableTenants, selectTenant, needsTenantSelection } = useAuth();
+  const { user, loading, userDataLoading, tenantId, isAdmin, isMaster, isImpersonating, impersonatedTenantName, clearImpersonation, availableTenants, selectTenant, needsTenantSelection } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const stored = localStorage.getItem("sidebar-open");
     if (stored !== null) return stored !== "false";
@@ -36,11 +36,13 @@ export default function SidebarLayout() {
     if (!loading && !userDataLoading) {
       if (!user) {
         navigate("/auth");
+      } else if (isMaster && !isImpersonating && !location.pathname.startsWith("/backoffice")) {
+        navigate("/backoffice", { replace: true });
       } else if (!tenantId && !isAdmin && !needsTenantSelection) {
         navigate("/pending-approval");
       }
     }
-  }, [user, loading, userDataLoading, tenantId, isAdmin, navigate, needsTenantSelection]);
+  }, [user, loading, userDataLoading, tenantId, isAdmin, isMaster, isImpersonating, navigate, needsTenantSelection, location.pathname]);
 
   // Auto-offline on tab close, restore status on mount
   useEffect(() => {
