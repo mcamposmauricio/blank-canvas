@@ -644,7 +644,7 @@ const AdminWorkspace = () => {
                   Novo Chat
                 </Button>
               </div>
-              <PendingRoomsList attendantId={userAttendantId} selectedRoomId={selectedRoomId} onSelectRoom={handleSelectPendingRoom} />
+              <PendingRoomsList attendantId={userAttendantId} selectedRoomId={selectedRoomId} onSelectRoom={handleSelectPendingRoom} refreshTrigger={pendingRefreshTrigger} />
               <div className="flex-1 min-h-0">
                 <ChatRoomList rooms={filteredRooms} selectedRoomId={selectedRoomId} onSelectRoom={handleSelectRoom} loading={roomsLoading} />
               </div>
