@@ -344,6 +344,7 @@ const AdminWorkspace = () => {
   const handleMarkResolved = async () => {
     if (!selectedRoomId) return;
     await supabase.from("chat_rooms").update({ resolution_status: "resolved" }).eq("id", selectedRoomId);
+    broadcastEvent("room_status", { room_id: selectedRoomId, resolution_status: "resolved", updated_at: new Date().toISOString() });
     setPendingSelectedRoom(null);
     setSelectedRoomId(null);
     toast.success("Marcado como resolvido!");

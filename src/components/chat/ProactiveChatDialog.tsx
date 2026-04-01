@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantRealtime } from "@/contexts/TenantRealtimeContext";
 import { toast } from "sonner";
 import { Loader2, MessageSquare, ChevronsUpDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ interface ProactiveChatDialogProps {
 }
 
 const ProactiveChatDialog = ({ open, onOpenChange, userId, attendantId, attendantName }: ProactiveChatDialogProps) => {
+  const { broadcastEvent } = useTenantRealtime();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [contacts, setContacts] = useState<CompanyContact[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -138,18 +140,13 @@ const ProactiveChatDialog = ({ open, onOpenChange, userId, attendantId, attendan
 
       if (!room) throw new Error("Failed to create room");
 
-      const { data: attProfile } = await supabase
-        .from("attendant_profiles")
-        .select("active_conversations")
-        .eq("id", attendantId)
-        .maybeSingle();
-
-      if (attProfile) {
-        await supabase
-          .from("attendant_profiles")
-          .update({ active_conversations: (attProfile.active_conversations ?? 0) + 1 })
-          .eq("id", attendantId);
-      }
+      // Broadcast for instant UI updates (trigger handles active_conversations)
+      broadcastEvent("room_status", {
+        room_id: room.id,
+        status: "active",
+        attendant_id: attendantId,
+        updated_at: new Date().toISOString(),
+      });
 
       await supabase.from("chat_messages").insert({
         room_id: room.id,

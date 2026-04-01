@@ -150,6 +150,22 @@ Deno.serve(async (req) => {
       // Send welcome message when attendant is assigned
       await sendWelcomeMessage(supabase, room_id, room.tenant_id);
 
+      // Broadcast room assignment for instant UI updates
+      if (room.tenant_id) {
+        const bc = supabase.channel(`tenant-bc-${room.tenant_id}`);
+        await bc.send({
+          type: "broadcast",
+          event: "room_status",
+          payload: {
+            room_id: roomId,
+            status: room.status,
+            attendant_id: room.attendant_id,
+            updated_at: new Date().toISOString(),
+          },
+        }).catch(() => {});
+        supabase.removeChannel(bc);
+      }
+
       const { data: attendant } = await supabase
         .from("attendant_profiles")
         .select("display_name, user_id")
