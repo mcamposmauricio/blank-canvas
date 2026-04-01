@@ -455,6 +455,7 @@ const AdminWorkspace = () => {
       room_id: selectedRoomId, sender_type: "system", sender_name: "Sistema",
       content: `[Sistema] Chat transferido para ${attendantName}`, is_internal: true,
     });
+    broadcastEvent("room_status", { room_id: selectedRoomId, status: isWaiting ? "active" : selectedRoom?.status, attendant_id: attendantId, updated_at: new Date().toISOString() });
     toast.success(`Conversa transferida para ${attendantName}`);
   };
 
