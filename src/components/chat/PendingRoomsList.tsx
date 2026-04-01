@@ -87,33 +87,7 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
   useEffect(() => {
     setPage(0);
     fetchPendingRooms(0);
-    if (!attendantId) return;
-
-    const channel = supabase
-      .channel("pending-rooms-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_rooms",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        () => {
-          if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(() => {
-            setPage(0);
-            fetchPendingRooms(0);
-          }, 3000);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, [attendantId, fetchPendingRooms, tenantId]);
+  }, [attendantId, fetchPendingRooms, refreshTrigger]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
