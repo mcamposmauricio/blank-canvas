@@ -185,6 +185,57 @@ const AdminCSATReport = () => {
               <MetricCard title={t("csat.report.negative")} value={stats.negativePercent != null ? `${stats.negativePercent}%` : "—"} icon={ThumbsDown} iconColor="text-red-500" iconBgColor="bg-red-500/10" subtitle={`${stats.negativeCount} avaliações`} />
             </div>
 
+            {stats.attendantRanking.length > 0 && (
+              <Card className="rounded-xl border border-white/[0.06] bg-card shadow-sm">
+                <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-yellow-500" />
+                  <h3 className="text-sm font-semibold">Ranking de Atendentes</h3>
+                  <span className="text-[11px] text-muted-foreground ml-1">({stats.attendantRanking.length})</span>
+                </div>
+                <CardContent className="px-4 pb-4 pt-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground w-10">#</TableHead>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Atendente</TableHead>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Média</TableHead>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Avaliações</TableHead>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">% Positivo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {stats.attendantRanking.map((entry, idx) => {
+                        const posPercent = entry.totalEvals > 0 ? Math.round((entry.positiveCount / entry.totalEvals) * 100) : 0;
+                        return (
+                          <TableRow key={entry.attendantId}>
+                            <TableCell className="text-center">
+                              {idx === 0 ? <span className="text-base">🥇</span> :
+                               idx === 1 ? <span className="text-base">🥈</span> :
+                               idx === 2 ? <span className="text-base">🥉</span> :
+                               <span className="text-[13px] text-muted-foreground tabular-nums">{idx + 1}</span>}
+                            </TableCell>
+                            <TableCell className="text-[13px] font-medium">{entry.attendantName}</TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex flex-col items-center gap-0.5">
+                                {renderStars(Math.round(entry.avgCsat))}
+                                <span className="text-[10px] font-medium tabular-nums">{entry.avgCsat}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center text-[13px] tabular-nums">{entry.totalEvals}</TableCell>
+                            <TableCell className="text-center">
+                              <span className={`text-[13px] font-medium tabular-nums ${posPercent >= 80 ? "text-green-600" : posPercent >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                                {posPercent}%
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid gap-4 lg:grid-cols-2">
               <ChartCard title={t("csat.report.csat_by_day")} isEmpty={stats.csatByDay.length === 0} emptyText={t("chat.gerencial.no_data")}>
                 <ResponsiveContainer width="100%" height="100%">
