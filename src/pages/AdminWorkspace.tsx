@@ -415,7 +415,10 @@ const AdminWorkspace = () => {
       .eq("id", roomId);
 
     if (error) toast.error("Erro ao atribuir conversa");
-    else toast.success("Conversa atribuída com sucesso!");
+    else {
+      broadcastEvent("room_status", { room_id: roomId, status: "active", attendant_id: profile.id, updated_at: new Date().toISOString() });
+      toast.success("Conversa atribuída com sucesso!");
+    }
   };
 
   const handleRequestClose = (roomId: string) => {
