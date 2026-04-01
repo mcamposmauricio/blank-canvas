@@ -36,6 +36,9 @@ export interface AttendantRankingEntry {
   totalEvals: number;
   positiveCount: number;
   negativeCount: number;
+  totalClosedChats: number;
+  responseRate: number;
+  avgDurationMinutes: number | null;
 }
 
 export interface CSATReportStats {
