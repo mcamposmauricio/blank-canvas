@@ -89,6 +89,14 @@ const AdminWorkspace = () => {
 
   // Polling moved to SidebarLayout for reliability (runs even without Workspace open)
 
+  // Increment pendingRefreshTrigger when rooms change (for PendingRoomsList)
+  useEffect(() => {
+    const unsub = onRoomStatusChange(() => {
+      setPendingRefreshTrigger(prev => prev + 1);
+    });
+    return unsub;
+  }, [onRoomStatusChange]);
+
   // Request browser notification permission
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
