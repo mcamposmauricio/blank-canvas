@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantRealtime } from "@/contexts/TenantRealtimeContext";
 import { toast } from "sonner";
 import { Loader2, MessageSquare, ChevronsUpDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
