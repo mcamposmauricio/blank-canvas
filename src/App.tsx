@@ -116,6 +116,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+        <TenantRealtimeProvider>
         <Routes>
           {/* Public Landing Page */}
           <Route path="/" element={<LandingPage />} />
