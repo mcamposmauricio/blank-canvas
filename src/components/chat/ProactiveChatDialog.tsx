@@ -140,18 +140,13 @@ const ProactiveChatDialog = ({ open, onOpenChange, userId, attendantId, attendan
 
       if (!room) throw new Error("Failed to create room");
 
-      const { data: attProfile } = await supabase
-        .from("attendant_profiles")
-        .select("active_conversations")
-        .eq("id", attendantId)
-        .maybeSingle();
-
-      if (attProfile) {
-        await supabase
-          .from("attendant_profiles")
-          .update({ active_conversations: (attProfile.active_conversations ?? 0) + 1 })
-          .eq("id", attendantId);
-      }
+      // Broadcast for instant UI updates (trigger handles active_conversations)
+      broadcastEvent("room_status", {
+        room_id: room.id,
+        status: "active",
+        attendant_id: attendantId,
+        updated_at: new Date().toISOString(),
+      });
 
       await supabase.from("chat_messages").insert({
         room_id: room.id,
