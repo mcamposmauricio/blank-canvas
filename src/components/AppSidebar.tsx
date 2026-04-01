@@ -28,6 +28,11 @@ import {
   FolderOpen,
   Import,
   Home,
+  Activity,
+  HeartPulse,
+  Clock,
+  Terminal,
+  Blocks,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -128,7 +133,8 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
           <div className="flex flex-col items-center gap-2 w-full">
             <button
               onClick={() => {
-                if (isAdmin || showChat) navigate("/admin/dashboard");
+                if (isMaster && !isImpersonating) navigate("/backoffice");
+                else if (isAdmin || showChat) navigate("/admin/dashboard");
                 else if (showNPS) navigate("/nps/dashboard");
                 else navigate("/nps/dashboard");
               }}
@@ -142,7 +148,8 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
           <div className="flex items-center justify-between w-full">
             <button
               onClick={() => {
-                if (isAdmin || showChat) navigate("/admin/dashboard");
+                if (isMaster && !isImpersonating) navigate("/backoffice");
+                else if (isAdmin || showChat) navigate("/admin/dashboard");
                 else if (showNPS) navigate("/nps/dashboard");
                 else navigate("/nps/dashboard");
               }}
@@ -167,7 +174,49 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
               <div key={i} className="h-8 rounded-md bg-muted animate-pulse" />
             ))}
           </div>
+        ) : isMaster && !isImpersonating ? (
+          /* ═══════ MASTER BACKOFFICE SIDEBAR ═══════ */
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel className={groupLabelCls}>
+                <span className="flex items-center gap-2"><Shield className="h-3.5 w-3.5" />Backoffice Master</span>
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {[
+                    { tab: "tenants", icon: Building2, label: "Plataformas" },
+                    { tab: "users", icon: Users, label: "Usuários" },
+                    { tab: "modules", icon: Blocks, label: "Módulos" },
+                    { tab: "benchmark", icon: TrendingUp, label: "Comparativo" },
+                    { tab: "performance", icon: Activity, label: "Performance" },
+                    { tab: "health", icon: HeartPulse, label: "Health Check" },
+                    { tab: "timeline", icon: Clock, label: "Timeline" },
+                    { tab: "metrics", icon: BarChart3, label: "Métricas" },
+                    { tab: "settings", icon: Settings, label: "Configurações" },
+                    { tab: "operations", icon: Terminal, label: "Operações" },
+                  ].map((item) => {
+                    const searchParams = new URLSearchParams(location.search);
+                    const currentTab = searchParams.get("tab") || "tenants";
+                    const active = location.pathname === "/backoffice" && currentTab === item.tab;
+                    return (
+                      <SidebarMenuItem key={item.tab}>
+                        <SidebarMenuButton
+                          onClick={() => navigate(`/backoffice?tab=${item.tab}`)}
+                          isActive={active}
+                          tooltip={item.label}
+                          className={cn(active ? activeItemCls : "hover:bg-sidebar-accent")}
+                        >
+                          <item.icon className="h-4 w-4" /><span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
         ) : (
+          /* ═══════ TENANT SIDEBAR (unchanged) ═══════ */
           <>
             {/* Home */}
             <SidebarGroup>
