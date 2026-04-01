@@ -128,10 +128,10 @@ export default function PerformanceTab() {
       <div>
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Volume no Período</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <MetricCard title="Mensagens Chat" value={dbVolume?.messages ?? 0} icon={Database} loading={volumeLoading} />
-          <MetricCard title="Salas Criadas" value={dbVolume?.rooms ?? 0} icon={Activity} loading={volumeLoading} />
-          <MetricCard title="Respostas NPS" value={dbVolume?.responses ?? 0} icon={Zap} loading={volumeLoading} />
-          <MetricCard title="Envios Campanha" value={dbVolume?.campaignSends ?? 0} icon={Zap} loading={volumeLoading} />
+          <MetricCard title="Mensagens Chat" value={dbVolume?.messages ?? 0} icon={Database} />
+          <MetricCard title="Salas Criadas" value={dbVolume?.rooms ?? 0} icon={Activity} />
+          <MetricCard title="Respostas NPS" value={dbVolume?.responses ?? 0} icon={Zap} />
+          <MetricCard title="Envios Campanha" value={dbVolume?.campaignSends ?? 0} icon={Zap} />
         </div>
       </div>
 
