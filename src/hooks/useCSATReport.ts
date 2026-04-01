@@ -29,6 +29,15 @@ export interface CSATReportFilters {
   page: number;
 }
 
+export interface AttendantRankingEntry {
+  attendantId: string;
+  attendantName: string;
+  avgCsat: number;
+  totalEvals: number;
+  positiveCount: number;
+  negativeCount: number;
+}
+
 export interface CSATReportStats {
   avgCsat: number | null;
   totalEvaluations: number;
@@ -40,6 +49,7 @@ export interface CSATReportStats {
   negativeCount: number;
   csatByDay: { date: string; avg: number; count: number }[];
   scoreDistribution: { score: number; count: number }[];
+  attendantRanking: AttendantRankingEntry[];
 }
 
 const PAGE_SIZE = 20;
