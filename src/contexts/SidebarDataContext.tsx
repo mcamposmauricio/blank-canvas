@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenantRealtime, type RoomStatusPayload, type AttendantUpdatePayload } from "@/contexts/TenantRealtimeContext";
 
 export interface TeamAttendant {
   id: string;
@@ -23,6 +24,7 @@ const SidebarDataContext = createContext<SidebarDataContextType | undefined>(und
 
 export function SidebarDataProvider({ children }: { children: ReactNode }) {
   const { user, isAdmin, isMaster, isImpersonating, tenantId } = useAuth();
+  const { onRoomStatusChange, onAttendantUpdate } = useTenantRealtime();
   const [teamAttendants, setTeamAttendants] = useState<TeamAttendant[]>([]);
   const [otherTeamAttendants, setOtherTeamAttendants] = useState<TeamAttendant[]>([]);
   const [unassignedCount, setUnassignedCount] = useState(0);
@@ -151,43 +153,6 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
     }, 5000);
   }, [resyncCounts]);
 
-  const handleRoomChange = useCallback(() => {
-    debouncedResync();
-  }, [debouncedResync]);
-
-  const handleAttendantChange = useCallback((payload: any) => {
-    const updated = payload.new as any;
-    if (!updated) return;
-
-    const applyToSetter = (setter: React.Dispatch<React.SetStateAction<TeamAttendant[]>>) => {
-      if (payload.eventType === "UPDATE") {
-        setter(prev => prev.map(a =>
-          a.id === updated.id
-            ? { ...a, status: updated.status, display_name: updated.display_name, active_count: updated.active_conversations ?? a.active_count }
-            : a
-        ));
-      } else if (payload.eventType === "DELETE") {
-        setter(prev => prev.filter(a => a.id !== payload.old?.id));
-      }
-    };
-
-    if (payload.eventType === "INSERT") {
-      setTeamAttendants(prev => {
-        if (prev.find(a => a.id === updated.id)) return prev;
-        return [...prev, {
-          id: updated.id,
-          display_name: updated.display_name,
-          user_id: updated.user_id,
-          active_count: updated.active_conversations ?? 0,
-          status: updated.status ?? null,
-        }];
-      });
-    }
-
-    applyToSetter(setTeamAttendants);
-    applyToSetter(setOtherTeamAttendants);
-  }, []);
-
   const isAdminRef = useRef(isAdmin);
   const isMasterRef = useRef(isMaster);
   const isImpersonatingRef = useRef(isImpersonating);
@@ -213,47 +178,43 @@ export function SidebarDataProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, tenantId]);
 
-  // Realtime channels — filtered by tenant_id
+  // ── Consume TenantRealtime events instead of pg_changes channels ────
   useEffect(() => {
     if (!user?.id) return;
 
-    const roomsChannel = supabase
-      .channel("global-sidebar-chat-rooms")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_rooms",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        handleRoomChange
-      )
-      .subscribe();
+    // Room status changes → debounced resync of counters
+    const unsubRoom = onRoomStatusChange(() => {
+      debouncedResync();
+    });
 
-    const attendantsChannel = supabase
-      .channel("global-sidebar-attendants")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "attendant_profiles",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        handleAttendantChange
-      )
-      .subscribe();
+    // Attendant updates → apply inline changes
+    const unsubAtt = onAttendantUpdate((payload: AttendantUpdatePayload) => {
+      const applyUpdate = (setter: React.Dispatch<React.SetStateAction<TeamAttendant[]>>) => {
+        setter(prev => prev.map(a =>
+          a.id === payload.attendant_id
+            ? {
+                ...a,
+                status: payload.status ?? a.status,
+                display_name: payload.display_name ?? a.display_name,
+                active_count: payload.active_conversations ?? a.active_count,
+              }
+            : a
+        ));
+      };
+      applyUpdate(setTeamAttendants);
+      applyUpdate(setOtherTeamAttendants);
+    });
 
+    // Periodic reconciliation
     const resyncInterval = setInterval(resyncCounts, 300_000);
 
     return () => {
-      supabase.removeChannel(roomsChannel);
-      supabase.removeChannel(attendantsChannel);
+      unsubRoom();
+      unsubAtt();
       clearInterval(resyncInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, tenantId]);
+  }, [user?.id, tenantId, debouncedResync, resyncCounts, onRoomStatusChange, onAttendantUpdate]);
 
   return (
     <SidebarDataContext.Provider value={{ teamAttendants, otherTeamAttendants, totalActiveChats, otherTeamsTotalChats, unassignedCount, initialized }}>

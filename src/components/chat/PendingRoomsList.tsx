@@ -22,9 +22,10 @@ interface PendingRoomsListProps {
   attendantId: string | null;
   selectedRoomId: string | null;
   onSelectRoom: (roomId: string) => void;
+  refreshTrigger?: number;
 }
 
-export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: PendingRoomsListProps) {
+export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, refreshTrigger }: PendingRoomsListProps) {
   const { tenantId } = useAuth();
   const [rooms, setRooms] = useState<PendingRoom[]>([]);
   const [totalCount, setTotalCount] = useState(0);
