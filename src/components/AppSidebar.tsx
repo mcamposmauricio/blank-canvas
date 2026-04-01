@@ -28,6 +28,11 @@ import {
   FolderOpen,
   Import,
   Home,
+  Activity,
+  HeartPulse,
+  Clock,
+  Terminal,
+  Blocks,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
