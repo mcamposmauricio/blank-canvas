@@ -336,6 +336,7 @@ const AdminWorkspace = () => {
     });
     // Trigger welcome message via assign-chat-room
     supabase.functions.invoke("assign-chat-room", { body: { room_id: selectedRoomId } }).catch(() => {});
+    broadcastEvent("room_status", { room_id: selectedRoomId, status: "active", attendant_id: userAttendantId, updated_at: new Date().toISOString() });
     setPendingSelectedRoom(null);
     toast.success("Conversa reaberta!");
   };
