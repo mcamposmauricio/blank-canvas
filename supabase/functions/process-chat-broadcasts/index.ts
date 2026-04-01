@@ -189,6 +189,14 @@ Deno.serve(async (req) => {
             })
             .eq("id", recipient.id);
 
+          // Broadcast room creation and message activity
+          try {
+            const bcChannel = supabase.channel(`tenant-bc-${broadcast.tenant_id ?? "global"}`);
+            await bcChannel.send({ type: "broadcast", event: "room_status", payload: { room_id: room.id, status: "active", attendant_id: senderAtt?.id ?? null, updated_at: new Date().toISOString() } });
+            await bcChannel.send({ type: "broadcast", event: "new_message_activity", payload: { room_id: room.id, updated_at: new Date().toISOString() } });
+            await supabase.removeChannel(bcChannel);
+          } catch {}
+
           totalProcessed++;
         } catch (err) {
           console.error(`Error processing recipient ${recipient.id}:`, err);
