@@ -33,6 +33,7 @@ interface ProactiveChatDialogProps {
 }
 
 const ProactiveChatDialog = ({ open, onOpenChange, userId, attendantId, attendantName }: ProactiveChatDialogProps) => {
+  const { broadcastEvent } = useTenantRealtime();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [contacts, setContacts] = useState<CompanyContact[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
