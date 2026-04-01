@@ -54,7 +54,7 @@ export interface CSATReportStats {
 
 const PAGE_SIZE = 20;
 
-const EMPTY_STATS: CSATReportStats = { avgCsat: null, totalEvaluations: 0, totalClosedChats: 0, responseRate: null, positivePercent: null, positiveCount: 0, negativePercent: null, negativeCount: 0, csatByDay: [], scoreDistribution: [] };
+const EMPTY_STATS: CSATReportStats = { avgCsat: null, totalEvaluations: 0, totalClosedChats: 0, responseRate: null, positivePercent: null, positiveCount: 0, negativePercent: null, negativeCount: 0, csatByDay: [], scoreDistribution: [], attendantRanking: [] };
 
 export function useCSATReport(filters: CSATReportFilters) {
   const [records, setRecords] = useState<CSATRecord[]>([]);
