@@ -54,7 +54,9 @@ const AdminWorkspace = () => {
   const viewingUnassigned = searchParams.get("queue") === "unassigned";
   const { t } = useLanguage();
   const { user, tenantId } = useAuth();
+  const { broadcastEvent, onRoomStatusChange } = useTenantRealtime();
   const isMobile = useIsMobile();
+  const [pendingRefreshTrigger, setPendingRefreshTrigger] = useState(0);
   const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1920);
   const isTablet = !isMobile && windowWidth < 1024;
   const isCompact = windowWidth < 1280;
