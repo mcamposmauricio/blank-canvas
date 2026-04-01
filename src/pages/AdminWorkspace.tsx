@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenantRealtime } from "@/contexts/TenantRealtimeContext";
 import { useChatMessages, useChatRooms } from "@/hooks/useChatRealtime";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
