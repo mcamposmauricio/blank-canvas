@@ -437,6 +437,7 @@ const AdminWorkspace = () => {
     await supabase.from("chat_rooms").update({
       status: "closed", resolution_status: resolutionStatus, closed_at: new Date().toISOString(),
     }).eq("id", closingRoomId);
+    broadcastEvent("room_status", { room_id: closingRoomId, status: "closed", resolution_status: resolutionStatus, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     clearDraft(closingRoomId);
     setClosingRoomId(null);
     const msgs: Record<string, string> = { resolved: "Conversa encerrada como resolvida", pending: "Conversa encerrada com pendência", inactive: "Conversa inativada", archived: "Conversa arquivada" };
