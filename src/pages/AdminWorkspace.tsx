@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenantRealtime } from "@/contexts/TenantRealtimeContext";
 import { useChatMessages, useChatRooms } from "@/hooks/useChatRealtime";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -53,7 +54,9 @@ const AdminWorkspace = () => {
   const viewingUnassigned = searchParams.get("queue") === "unassigned";
   const { t } = useLanguage();
   const { user, tenantId } = useAuth();
+  const { broadcastEvent, onRoomStatusChange } = useTenantRealtime();
   const isMobile = useIsMobile();
+  const [pendingRefreshTrigger, setPendingRefreshTrigger] = useState(0);
   const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1920);
   const isTablet = !isMobile && windowWidth < 1024;
   const isCompact = windowWidth < 1280;
@@ -85,6 +88,14 @@ const AdminWorkspace = () => {
   // Side panel stays open by default — user can toggle manually
 
   // Polling moved to SidebarLayout for reliability (runs even without Workspace open)
+
+  // Increment pendingRefreshTrigger when rooms change (for PendingRoomsList)
+  useEffect(() => {
+    const unsub = onRoomStatusChange(() => {
+      setPendingRefreshTrigger(prev => prev + 1);
+    });
+    return unsub;
+  }, [onRoomStatusChange]);
 
   // Request browser notification permission
   useEffect(() => {
@@ -325,6 +336,7 @@ const AdminWorkspace = () => {
     });
     // Trigger welcome message via assign-chat-room
     supabase.functions.invoke("assign-chat-room", { body: { room_id: selectedRoomId } }).catch(() => {});
+    broadcastEvent("room_status", { room_id: selectedRoomId, status: "active", attendant_id: userAttendantId, updated_at: new Date().toISOString() });
     setPendingSelectedRoom(null);
     toast.success("Conversa reaberta!");
   };
@@ -403,7 +415,10 @@ const AdminWorkspace = () => {
       .eq("id", roomId);
 
     if (error) toast.error("Erro ao atribuir conversa");
-    else toast.success("Conversa atribuída com sucesso!");
+    else {
+      broadcastEvent("room_status", { room_id: roomId, status: "active", attendant_id: profile.id, updated_at: new Date().toISOString() });
+      toast.success("Conversa atribuída com sucesso!");
+    }
   };
 
   const handleRequestClose = (roomId: string) => {
@@ -422,6 +437,7 @@ const AdminWorkspace = () => {
     await supabase.from("chat_rooms").update({
       status: "closed", resolution_status: resolutionStatus, closed_at: new Date().toISOString(),
     }).eq("id", closingRoomId);
+    broadcastEvent("room_status", { room_id: closingRoomId, status: "closed", resolution_status: resolutionStatus, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     clearDraft(closingRoomId);
     setClosingRoomId(null);
     const msgs: Record<string, string> = { resolved: "Conversa encerrada como resolvida", pending: "Conversa encerrada com pendência", inactive: "Conversa inativada", archived: "Conversa arquivada" };
@@ -439,6 +455,7 @@ const AdminWorkspace = () => {
       room_id: selectedRoomId, sender_type: "system", sender_name: "Sistema",
       content: `[Sistema] Chat transferido para ${attendantName}`, is_internal: true,
     });
+    broadcastEvent("room_status", { room_id: selectedRoomId, status: isWaiting ? "active" : selectedRoom?.status, attendant_id: attendantId, updated_at: new Date().toISOString() });
     toast.success(`Conversa transferida para ${attendantName}`);
   };
 
@@ -479,6 +496,9 @@ const AdminWorkspace = () => {
     }
 
     await supabase.from("chat_messages").insert(insertData as any);
+    if (!isInternal) {
+      broadcastEvent("new_message_activity", { room_id: selectedRoomId, updated_at: new Date().toISOString() });
+    }
     setReplyTarget(null);
   };
 
@@ -633,7 +653,7 @@ const AdminWorkspace = () => {
                   Novo Chat
                 </Button>
               </div>
-              <PendingRoomsList attendantId={userAttendantId} selectedRoomId={selectedRoomId} onSelectRoom={handleSelectPendingRoom} />
+              <PendingRoomsList attendantId={userAttendantId} selectedRoomId={selectedRoomId} onSelectRoom={handleSelectPendingRoom} refreshTrigger={pendingRefreshTrigger} />
               <div className="flex-1 min-h-0">
                 <ChatRoomList rooms={filteredRooms} selectedRoomId={selectedRoomId} onSelectRoom={handleSelectRoom} loading={roomsLoading} />
               </div>

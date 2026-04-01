@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight, AlertCircle } from "lucide-react";
@@ -22,10 +21,10 @@ interface PendingRoomsListProps {
   attendantId: string | null;
   selectedRoomId: string | null;
   onSelectRoom: (roomId: string) => void;
+  refreshTrigger?: number;
 }
 
-export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: PendingRoomsListProps) {
-  const { tenantId } = useAuth();
+export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, refreshTrigger }: PendingRoomsListProps) {
   const [rooms, setRooms] = useState<PendingRoom[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
@@ -86,33 +85,7 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom }: 
   useEffect(() => {
     setPage(0);
     fetchPendingRooms(0);
-    if (!attendantId) return;
-
-    const channel = supabase
-      .channel("pending-rooms-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_rooms",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        () => {
-          if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(() => {
-            setPage(0);
-            fetchPendingRooms(0);
-          }, 3000);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, [attendantId, fetchPendingRooms, tenantId]);
+  }, [attendantId, fetchPendingRooms, refreshTrigger]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;

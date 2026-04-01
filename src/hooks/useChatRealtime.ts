@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantRealtime, type RoomStatusPayload, type NewMessageActivityPayload } from "@/contexts/TenantRealtimeContext";
 
 interface ChatMessage {
   id: string;
@@ -165,6 +166,10 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
   const initialLoadDone = useRef(false);
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const roomsRef = useRef(rooms);
+  roomsRef.current = rooms;
+
+  const { onRoomStatusChange, onNewMessageActivity } = useTenantRealtime();
 
   const fetchSingleRoom = useCallback(async (roomId: string) => {
     const { data } = await supabase
@@ -283,166 +288,117 @@ export function useChatRooms(ownerUserId: string | null, options?: { excludeClos
     [ownerUserId]
   );
 
+  // ── Subscribe to TenantRealtime events instead of pg_changes ─────────
   useEffect(() => {
     fetchRooms(true);
-
     if (!ownerUserId) return;
 
-    const tenantId = optionsRef.current?.tenantId;
+    // Handle room status changes (INSERT, UPDATE, DELETE via safety net + broadcasts)
+    const unsubStatus = onRoomStatusChange((payload: RoomStatusPayload) => {
+      const roomId = payload.room_id;
 
-    // ── Canal: chat_rooms — filtered by tenant_id when available ─────────
-    const roomsChannel = supabase
-      .channel("chat-rooms-updates")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_rooms",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        (payload) => {
-          const newRoom = payload.new as ChatRoom;
-          if (optionsRef.current?.excludeClosed && newRoom.status === "closed") return;
-          fetchSingleRoom(newRoom.id);
+      // DELETE
+      if (payload.status === "_deleted") {
+        setRooms((prev) => prev.filter((r) => r.id !== roomId));
+        return;
+      }
+
+      // If excludeClosed and status is closed, remove from list
+      if (optionsRef.current?.excludeClosed && payload.status === "closed") {
+        setRooms((prev) => prev.filter((r) => r.id !== roomId));
+        return;
+      }
+
+      setRooms((prev) => {
+        const idx = prev.findIndex((r) => r.id === roomId);
+        if (idx === -1) {
+          // New room — fetch full data
+          fetchSingleRoom(roomId);
+          return prev;
         }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "chat_rooms",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        (payload) => {
-          const updated = payload.new as ChatRoom;
 
+        const patched = [...prev];
+        patched[idx] = {
+          ...patched[idx],
+          status: payload.status ?? patched[idx].status,
+          attendant_id: payload.attendant_id !== undefined ? payload.attendant_id : patched[idx].attendant_id,
+          priority: (payload.priority ?? patched[idx].priority) as string,
+          assigned_at: payload.assigned_at ?? patched[idx].assigned_at,
+          closed_at: payload.closed_at ?? patched[idx].closed_at,
+          updated_at: payload.updated_at ?? patched[idx].updated_at,
+        };
+        return patched;
+      });
+    });
+
+    // Handle message activity (fetch last message, sound, notification)
+    const unsubMsg = onNewMessageActivity((payload: NewMessageActivityPayload) => {
+      const roomId = payload.room_id;
+
+      supabase
+        .from("chat_messages")
+        .select("content, sender_type, is_internal, sender_name, created_at, room_id")
+        .eq("room_id", roomId)
+        .eq("is_internal", false)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .then(({ data: msgs }) => {
+          if (!msgs || msgs.length === 0) return;
+          const msg = msgs[0];
+
+          // Sound notification for visitor messages on non-selected rooms
+          if (msg.sender_type === "visitor" && msg.room_id !== selectedRoomIdRef.current) {
+            if (optionsRef.current?.soundEnabled !== false) {
+              try {
+                const audio = new Audio(
+                  "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
+                );
+                audio.volume = 0.3;
+                audio.play().catch(() => {});
+              } catch {}
+            }
+
+            if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+              const room = roomsRef.current.find((r) => r.id === msg.room_id);
+              const visitorName = room?.visitor_name || msg.sender_name || "Visitante";
+              new Notification(`Nova mensagem de ${visitorName}`, {
+                body: msg.content.slice(0, 100),
+                icon: "/logo-icon-dark.svg",
+                tag: `chat-${msg.room_id}`,
+              });
+            }
+          }
+
+          // Update room in list
           setRooms((prev) => {
-            const idx = prev.findIndex((r) => r.id === updated.id);
-
-            if (optionsRef.current?.excludeClosed && updated.status === "closed") {
-              return prev.filter((r) => r.id !== updated.id);
-            }
-
-            if (idx === -1) {
-              fetchSingleRoom(updated.id);
-              return prev;
-            }
+            const idx = prev.findIndex((r) => r.id === msg.room_id);
+            if (idx === -1) return prev;
 
             const patched = [...prev];
-            patched[idx] = {
-              ...patched[idx],
-              status: updated.status,
-              attendant_id: updated.attendant_id,
-              priority: updated.priority,
-              assigned_at: updated.assigned_at,
-              closed_at: updated.closed_at,
-              updated_at: updated.updated_at,
-              visitor_name: patched[idx].visitor_name,
-              visitor_email: patched[idx].visitor_email,
-              last_message: patched[idx].last_message,
-              last_message_at: patched[idx].last_message_at,
-              last_message_sender_type: patched[idx].last_message_sender_type,
-              unread_count: patched[idx].unread_count,
-            };
-            return patched;
+            const room = { ...patched[idx] };
+
+            room.last_message = msg.content;
+            room.last_message_at = msg.created_at;
+            room.last_message_sender_type = msg.sender_type;
+
+            if (
+              msg.sender_type === "visitor" &&
+              msg.room_id !== selectedRoomIdRef.current
+            ) {
+              room.unread_count = (room.unread_count ?? 0) + 1;
+            }
+
+            patched[idx] = room;
+            return [...patched].sort(SORT_ROOMS);
           });
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "chat_rooms",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        (payload) => {
-          const deletedId = (payload.old as { id: string }).id;
-          setRooms((prev) => prev.filter((r) => r.id !== deletedId));
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "chat_rooms",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        (payload) => {
-          const updated = payload.new as ChatRoom & { updated_at: string };
-          const old = payload.old as ChatRoom & { updated_at: string };
-
-          // Only fetch last message if updated_at changed (indicates message activity)
-          if (updated.updated_at !== old.updated_at) {
-            supabase
-              .from("chat_messages")
-              .select("content, sender_type, is_internal, sender_name, created_at, room_id")
-              .eq("room_id", updated.id)
-              .eq("is_internal", false)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .then(({ data: msgs }) => {
-                if (!msgs || msgs.length === 0) return;
-                const msg = msgs[0];
-
-                // Sound notification for visitor messages on non-selected rooms
-                if (msg.sender_type === "visitor" && msg.room_id !== selectedRoomIdRef.current) {
-                  if (optionsRef.current?.soundEnabled !== false) {
-                    try {
-                      const audio = new Audio(
-                        "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
-                      );
-                      audio.volume = 0.3;
-                      audio.play().catch(() => {});
-                    } catch {}
-                  }
-
-                  if (document.hidden && "Notification" in window && Notification.permission === "granted") {
-                    const room = rooms.find((r) => r.id === msg.room_id);
-                    const visitorName = room?.visitor_name || msg.sender_name || "Visitante";
-                    new Notification(`Nova mensagem de ${visitorName}`, {
-                      body: msg.content.slice(0, 100),
-                      icon: "/logo-icon-dark.svg",
-                      tag: `chat-${msg.room_id}`,
-                    });
-                  }
-                }
-
-                // Update room in list
-                setRooms((prev) => {
-                  const idx = prev.findIndex((r) => r.id === msg.room_id);
-                  if (idx === -1) return prev;
-
-                  const patched = [...prev];
-                  const room = { ...patched[idx] };
-
-                  room.last_message = msg.content;
-                  room.last_message_at = msg.created_at;
-                  room.last_message_sender_type = msg.sender_type;
-
-                  if (
-                    msg.sender_type === "visitor" &&
-                    msg.room_id !== selectedRoomIdRef.current
-                  ) {
-                    room.unread_count = (room.unread_count ?? 0) + 1;
-                  }
-
-                  patched[idx] = room;
-                  return [...patched].sort(SORT_ROOMS);
-                });
-              });
-          }
-        }
-      )
-      .subscribe();
+        });
+    });
 
     return () => {
-      supabase.removeChannel(roomsChannel);
+      unsubStatus();
+      unsubMsg();
     };
-  }, [ownerUserId, fetchRooms, fetchSingleRoom]);
+  }, [ownerUserId, fetchRooms, fetchSingleRoom, onRoomStatusChange, onNewMessageActivity]);
 
   const markRoomAsRead = useCallback(
     async (roomId: string) => {
@@ -474,7 +430,8 @@ export function useAttendantQueues(tenantId?: string | null) {
   const [attendants, setAttendants] = useState<AttendantQueue[]>([]);
   const [unassignedRooms, setUnassignedRooms] = useState<UnassignedRoom[]>([]);
   const [loading, setLoading] = useState(true);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { onAttendantUpdate } = useTenantRealtime();
 
   const fetchQueues = useCallback(async () => {
     const { data: profiles } = await supabase
@@ -530,34 +487,19 @@ export function useAttendantQueues(tenantId?: string | null) {
   useEffect(() => {
     fetchQueues();
 
-    const debouncedFetch = () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        fetchQueues();
-      }, 3000);
-    };
+    // Polling fallback every 10s instead of pg_changes channel
+    const interval = setInterval(fetchQueues, 10000);
 
-    // Only listen to attendant_profiles — room changes are handled by the
-    // COUNT-based trigger which updates attendant_profiles.active_conversations
-    const channel = supabase
-      .channel("attendant-queues-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "attendant_profiles",
-          ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),
-        },
-        debouncedFetch
-      )
-      .subscribe();
+    // Also listen for attendant updates via broadcast for immediate refresh
+    const unsub = onAttendantUpdate(() => {
+      fetchQueues();
+    });
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      supabase.removeChannel(channel);
+      clearInterval(interval);
+      unsub();
     };
-  }, [fetchQueues, tenantId]);
+  }, [fetchQueues, onAttendantUpdate]);
 
   return { attendants, unassignedRooms, loading, refetch: fetchQueues };
 }

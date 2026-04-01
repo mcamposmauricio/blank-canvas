@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       // Fetch active/waiting rooms for this tenant (for chain + absence rules)
       const roomQuery = supabase
         .from("chat_rooms")
-        .select("id, status, attendant_id, resolution_status")
+        .select("id, status, attendant_id, resolution_status, tenant_id")
         .or("status.in.(active,waiting),and(status.eq.closed,resolution_status.eq.pending)");
 
       if (tenantId !== "__none__") {
@@ -247,6 +247,13 @@ Deno.serve(async (req) => {
               closed_at: new Date().toISOString(),
             })
             .eq("id", room.id);
+
+          // Broadcast room status change
+          try {
+            const bc = supabase.channel(`tenant-bc-${room.tenant_id ?? "global"}`);
+            await bc.send({ type: "broadcast", event: "room_status", payload: { room_id: room.id, status: "closed", resolution_status: "pending", updated_at: new Date().toISOString() } });
+            await supabase.removeChannel(bc);
+          } catch {}
         } else if (nextStep === "auto_close") {
           const targetResolution = stepRule.close_resolution_status ?? "inactive";
           // Close with configured resolution status
@@ -258,6 +265,13 @@ Deno.serve(async (req) => {
               closed_at: new Date().toISOString(),
             })
             .eq("id", room.id);
+
+          // Broadcast room status change
+          try {
+            const bc = supabase.channel(`tenant-bc-${room.tenant_id ?? "global"}`);
+            await bc.send({ type: "broadcast", event: "room_status", payload: { room_id: room.id, status: "closed", resolution_status: targetResolution, updated_at: new Date().toISOString() } });
+            await supabase.removeChannel(bc);
+          } catch {}
 
           // Decrement attendant active_conversations
           if (room.attendant_id) {

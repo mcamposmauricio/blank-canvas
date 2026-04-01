@@ -310,7 +310,7 @@ Deno.serve(async (req) => {
     result.sort((a, b) => (b.priority ?? 5) - (a.priority ?? 5));
 
     return new Response(JSON.stringify({ banners: result }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
