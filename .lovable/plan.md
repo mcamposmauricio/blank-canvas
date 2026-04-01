@@ -1,33 +1,44 @@
 
 
-# Ranking de Atendentes no CSAT Report
+# Ranking de Atendentes — Informacoes Expandidas
 
-## O que sera feito
+## O que sera adicionado
 
-Adicionar um card/secao de ranking de atendentes entre os metric cards e os graficos, mostrando uma tabela compacta com os atendentes ordenados por media CSAT, incluindo quantidade de avaliacoes e media.
+Expandir o card de ranking para incluir: total de chats atendidos (closed), taxa de resposta CSAT, contagem de negativos, e tempo medio de atendimento por atendente.
 
 ## Implementacao
 
 ### `useCSATReport.ts`
 
-Agregar dados por atendente a partir dos `rooms` ja carregados na query de stats (que ja tem `attendant_id` e `csat_score`). Calcular por atendente: media CSAT, total de avaliacoes, contagem positiva (4-5) e negativa (1-2). Adicionar ao `CSATReportStats`:
+1. Expandir a interface `AttendantRankingEntry` com novos campos:
+   - `totalClosedChats: number` — total de salas fechadas por aquele atendente (com ou sem CSAT)
+   - `responseRate: number` — % de chats que tiveram avaliacao CSAT
+   - `avgDurationMinutes: number | null` — tempo medio de atendimento
 
-```typescript
-attendantRanking: { attendantId: string; avgCsat: number; totalEvals: number; positiveCount: number; negativeCount: number }[]
-```
+2. Na agregacao existente (linhas 155-165), ja temos `rooms` (salas com CSAT). Precisamos de uma query adicional para contar **todos** os chats fechados por atendente (sem filtro de CSAT) para calcular a taxa de resposta:
+   - Query: `chat_rooms` where `status = closed`, agrupando por `attendant_id`, com os mesmos filtros de data/tag/contact
+   - Calcular `created_at → closed_at` diff para tempo medio
 
-Resolver nomes dos atendentes fazendo uma query em `attendant_profiles` com os IDs encontrados.
+3. Atualizar `EMPTY_STATS` para incluir os novos campos default.
 
 ### `AdminCSATReport.tsx`
 
-Adicionar um `ChartCard` ou `Card` com titulo "Ranking de Atendentes" apos os metric cards e antes dos graficos. Conteudo:
-- Tabela compacta: posicao (medal icons para top 3), nome, media (com estrelas), avaliacoes, % positivo
-- Ordenado por media CSAT desc, desempate por quantidade de avaliacoes
+Expandir a tabela do ranking com novas colunas:
+- **Chats Atendidos** — total de chats fechados pelo atendente
+- **Taxa de Resposta** — % dos chats que receberam avaliacao CSAT
+- **% Negativo** — percentual de avaliacoes 1-2
+- **Tempo Médio** — duracao media em minutos (formatado como Xh Ym ou Xm)
+
+A tabela ficara com 8 colunas: #, Atendente, Media, Avaliacoes, Chats, Taxa Resp., % Positivo, % Negativo, Tempo Medio.
 
 ## Arquivos
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/hooks/useCSATReport.ts` | Adicionar `attendantRanking` ao stats com agregacao por atendente |
-| `src/pages/AdminCSATReport.tsx` | Novo card de ranking entre metrics e graficos |
+| `src/hooks/useCSATReport.ts` | Expandir interface + query adicional de closed chats por atendente |
+| `src/pages/AdminCSATReport.tsx` | Novas colunas na tabela de ranking |
+
+## Impacto
+
+Uma query adicional de contagem (head only com group simulation) — impacto minimo em performance. Nenhuma mudanca em outras paginas.
 
