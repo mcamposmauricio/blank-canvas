@@ -36,6 +36,9 @@ export interface AttendantRankingEntry {
   totalEvals: number;
   positiveCount: number;
   negativeCount: number;
+  totalClosedChats: number;
+  responseRate: number;
+  avgDurationMinutes: number | null;
 }
 
 export interface CSATReportStats {
@@ -164,7 +167,32 @@ export function useCSATReport(filters: CSATReportFilters) {
       if ((r.csat_score ?? 0) <= 2) byAttendant[aid].neg += 1;
     });
 
+    // Query all closed chats per attendant (with same filters but no CSAT filter) for response rate + duration
+    let allClosedQuery = supabase.from("chat_rooms").select("attendant_id, created_at, closed_at").eq("status", "closed");
+    if (startDate) allClosedQuery = allClosedQuery.gte("closed_at", startDate);
+    if (endDate) allClosedQuery = allClosedQuery.lt("closed_at", endDate);
+    if (effectiveAttendantIds) allClosedQuery = allClosedQuery.in("attendant_id", effectiveAttendantIds);
+    if (tagRoomIds) allClosedQuery = allClosedQuery.in("id", tagRoomIds.slice(0, 500));
+    if (filters.contactId) allClosedQuery = allClosedQuery.eq("contact_id", filters.contactId);
+    if (filters.companyContactId) allClosedQuery = allClosedQuery.eq("company_contact_id", filters.companyContactId);
+    const { data: allClosedRooms } = await allClosedQuery;
+
+    const closedByAtt: Record<string, { count: number; totalDur: number; durCount: number }> = {};
+    (allClosedRooms ?? []).forEach(r => {
+      const aid = r.attendant_id;
+      if (!aid) return;
+      if (!closedByAtt[aid]) closedByAtt[aid] = { count: 0, totalDur: 0, durCount: 0 };
+      closedByAtt[aid].count += 1;
+      if (r.created_at && r.closed_at) {
+        const dur = (new Date(r.closed_at).getTime() - new Date(r.created_at).getTime()) / 60000;
+        if (dur > 0) { closedByAtt[aid].totalDur += dur; closedByAtt[aid].durCount += 1; }
+      }
+    });
+
     const rankAttIds = Object.keys(byAttendant);
+    // Also include attendants that have closed chats but no CSAT
+    Object.keys(closedByAtt).forEach(id => { if (!rankAttIds.includes(id)) rankAttIds.push(id); });
+
     let rankAttMap: Record<string, string> = {};
     if (rankAttIds.length > 0) {
       const { data: rankAtts } = await supabase.from("attendant_profiles").select("id, display_name").in("id", rankAttIds);
@@ -172,14 +200,22 @@ export function useCSATReport(filters: CSATReportFilters) {
     }
 
     const attendantRanking: AttendantRankingEntry[] = rankAttIds
-      .map(id => ({
-        attendantId: id,
-        attendantName: rankAttMap[id] ?? "—",
-        avgCsat: Number((byAttendant[id].sum / byAttendant[id].count).toFixed(1)),
-        totalEvals: byAttendant[id].count,
-        positiveCount: byAttendant[id].pos,
-        negativeCount: byAttendant[id].neg,
-      }))
+      .filter(id => (byAttendant[id]?.count ?? 0) > 0 || (closedByAtt[id]?.count ?? 0) > 0)
+      .map(id => {
+        const csat = byAttendant[id] ?? { sum: 0, count: 0, pos: 0, neg: 0 };
+        const closed = closedByAtt[id] ?? { count: 0, totalDur: 0, durCount: 0 };
+        return {
+          attendantId: id,
+          attendantName: rankAttMap[id] ?? "—",
+          avgCsat: csat.count > 0 ? Number((csat.sum / csat.count).toFixed(1)) : 0,
+          totalEvals: csat.count,
+          positiveCount: csat.pos,
+          negativeCount: csat.neg,
+          totalClosedChats: closed.count,
+          responseRate: closed.count > 0 ? Math.round((csat.count / closed.count) * 100) : 0,
+          avgDurationMinutes: closed.durCount > 0 ? Math.round(closed.totalDur / closed.durCount) : null,
+        };
+      })
       .sort((a, b) => b.avgCsat - a.avgCsat || b.totalEvals - a.totalEvals);
 
     setStats({ avgCsat, totalEvaluations, totalClosedChats, responseRate, positivePercent, positiveCount, negativePercent, negativeCount, csatByDay, scoreDistribution, attendantRanking });
