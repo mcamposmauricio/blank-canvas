@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Star, ThumbsUp, ThumbsDown, BarChart3, Download, MessageSquare, ChevronLeft, ChevronRight, X, MessageCircle, CheckCircle, Percent } from "lucide-react";
+import { Star, ThumbsUp, ThumbsDown, BarChart3, Download, MessageSquare, ChevronLeft, ChevronRight, X, MessageCircle, CheckCircle, Percent, Trophy, Medal } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
