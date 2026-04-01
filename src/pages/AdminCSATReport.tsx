@@ -200,12 +200,22 @@ const AdminCSATReport = () => {
                         <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Atendente</TableHead>
                         <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Média</TableHead>
                         <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Avaliações</TableHead>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Chats</TableHead>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Taxa Resp.</TableHead>
                         <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">% Positivo</TableHead>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">% Negativo</TableHead>
+                        <TableHead className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Tempo Médio</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {stats.attendantRanking.map((entry, idx) => {
                         const posPercent = entry.totalEvals > 0 ? Math.round((entry.positiveCount / entry.totalEvals) * 100) : 0;
+                        const negPercent = entry.totalEvals > 0 ? Math.round((entry.negativeCount / entry.totalEvals) * 100) : 0;
+                        const fmtDuration = (mins: number | null) => {
+                          if (mins == null) return "—";
+                          if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+                          return `${mins}m`;
+                        };
                         return (
                           <TableRow key={entry.attendantId}>
                             <TableCell className="text-center">
@@ -222,10 +232,24 @@ const AdminCSATReport = () => {
                               </div>
                             </TableCell>
                             <TableCell className="text-center text-[13px] tabular-nums">{entry.totalEvals}</TableCell>
+                            <TableCell className="text-center text-[13px] tabular-nums">{entry.totalClosedChats}</TableCell>
+                            <TableCell className="text-center">
+                              <span className={`text-[13px] font-medium tabular-nums ${entry.responseRate >= 50 ? "text-blue-600" : entry.responseRate >= 25 ? "text-amber-600" : "text-muted-foreground"}`}>
+                                {entry.responseRate}%
+                              </span>
+                            </TableCell>
                             <TableCell className="text-center">
                               <span className={`text-[13px] font-medium tabular-nums ${posPercent >= 80 ? "text-green-600" : posPercent >= 50 ? "text-amber-600" : "text-red-600"}`}>
                                 {posPercent}%
                               </span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className={`text-[13px] font-medium tabular-nums ${negPercent <= 10 ? "text-green-600" : negPercent <= 30 ? "text-amber-600" : "text-red-600"}`}>
+                                {negPercent}%
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center text-[13px] tabular-nums text-muted-foreground">
+                              {fmtDuration(entry.avgDurationMinutes)}
                             </TableCell>
                           </TableRow>
                         );
