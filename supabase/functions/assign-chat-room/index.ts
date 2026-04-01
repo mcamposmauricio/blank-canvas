@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
           type: "broadcast",
           event: "room_status",
           payload: {
-            room_id: roomId,
+            room_id: room_id,
             status: room.status,
             attendant_id: room.attendant_id,
             updated_at: new Date().toISOString(),
