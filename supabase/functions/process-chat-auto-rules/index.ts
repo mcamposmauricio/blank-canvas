@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       // Fetch active/waiting rooms for this tenant (for chain + absence rules)
       const roomQuery = supabase
         .from("chat_rooms")
-        .select("id, status, attendant_id, resolution_status")
+        .select("id, status, attendant_id, resolution_status, tenant_id")
         .or("status.in.(active,waiting),and(status.eq.closed,resolution_status.eq.pending)");
 
       if (tenantId !== "__none__") {
