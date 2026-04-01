@@ -496,6 +496,9 @@ const AdminWorkspace = () => {
     }
 
     await supabase.from("chat_messages").insert(insertData as any);
+    if (!isInternal) {
+      broadcastEvent("new_message_activity", { room_id: selectedRoomId, updated_at: new Date().toISOString() });
+    }
     setReplyTarget(null);
   };
 
