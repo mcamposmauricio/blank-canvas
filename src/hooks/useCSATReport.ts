@@ -29,6 +29,15 @@ export interface CSATReportFilters {
   page: number;
 }
 
+export interface AttendantRankingEntry {
+  attendantId: string;
+  attendantName: string;
+  avgCsat: number;
+  totalEvals: number;
+  positiveCount: number;
+  negativeCount: number;
+}
+
 export interface CSATReportStats {
   avgCsat: number | null;
   totalEvaluations: number;
@@ -40,11 +49,12 @@ export interface CSATReportStats {
   negativeCount: number;
   csatByDay: { date: string; avg: number; count: number }[];
   scoreDistribution: { score: number; count: number }[];
+  attendantRanking: AttendantRankingEntry[];
 }
 
 const PAGE_SIZE = 20;
 
-const EMPTY_STATS: CSATReportStats = { avgCsat: null, totalEvaluations: 0, totalClosedChats: 0, responseRate: null, positivePercent: null, positiveCount: 0, negativePercent: null, negativeCount: 0, csatByDay: [], scoreDistribution: [] };
+const EMPTY_STATS: CSATReportStats = { avgCsat: null, totalEvaluations: 0, totalClosedChats: 0, responseRate: null, positivePercent: null, positiveCount: 0, negativePercent: null, negativeCount: 0, csatByDay: [], scoreDistribution: [], attendantRanking: [] };
 
 export function useCSATReport(filters: CSATReportFilters) {
   const [records, setRecords] = useState<CSATRecord[]>([]);
@@ -142,7 +152,37 @@ export function useCSATReport(filters: CSATReportFilters) {
     rooms.forEach(r => { const s = r.csat_score ?? 0; if (s >= 1 && s <= 5) scoreCounts[s]++; });
     const scoreDistribution = [1, 2, 3, 4, 5].map(score => ({ score, count: scoreCounts[score] }));
 
-    setStats({ avgCsat, totalEvaluations, totalClosedChats, responseRate, positivePercent, positiveCount, negativePercent, negativeCount, csatByDay, scoreDistribution });
+    // Attendant ranking aggregation
+    const byAttendant: Record<string, { sum: number; count: number; pos: number; neg: number }> = {};
+    rooms.forEach(r => {
+      const aid = r.attendant_id;
+      if (!aid) return;
+      if (!byAttendant[aid]) byAttendant[aid] = { sum: 0, count: 0, pos: 0, neg: 0 };
+      byAttendant[aid].sum += r.csat_score ?? 0;
+      byAttendant[aid].count += 1;
+      if ((r.csat_score ?? 0) >= 4) byAttendant[aid].pos += 1;
+      if ((r.csat_score ?? 0) <= 2) byAttendant[aid].neg += 1;
+    });
+
+    const rankAttIds = Object.keys(byAttendant);
+    let rankAttMap: Record<string, string> = {};
+    if (rankAttIds.length > 0) {
+      const { data: rankAtts } = await supabase.from("attendant_profiles").select("id, display_name").in("id", rankAttIds);
+      (rankAtts ?? []).forEach(a => { rankAttMap[a.id] = a.display_name; });
+    }
+
+    const attendantRanking: AttendantRankingEntry[] = rankAttIds
+      .map(id => ({
+        attendantId: id,
+        attendantName: rankAttMap[id] ?? "—",
+        avgCsat: Number((byAttendant[id].sum / byAttendant[id].count).toFixed(1)),
+        totalEvals: byAttendant[id].count,
+        positiveCount: byAttendant[id].pos,
+        negativeCount: byAttendant[id].neg,
+      }))
+      .sort((a, b) => b.avgCsat - a.avgCsat || b.totalEvals - a.totalEvals);
+
+    setStats({ avgCsat, totalEvaluations, totalClosedChats, responseRate, positivePercent, positiveCount, negativePercent, negativeCount, csatByDay, scoreDistribution, attendantRanking });
     setTotalCount(totalEvaluations);
 
     // Paginated records
