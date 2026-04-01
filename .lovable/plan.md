@@ -1,66 +1,68 @@
 
 
-# Painel Master Backoffice — Garantia de Zero Impacto nos Tenants
+# Sidebar dedicado para Master Backoffice
 
-## Analise de Risco
+## O que muda
 
-Revisei os arquivos criticos: `App.tsx`, `Auth.tsx`, `SidebarLayout.tsx`, `AuthContext.tsx`. Abaixo esta a analise de cada ponto de risco e a estrategia para elimina-lo.
+Quando `isMaster && !isImpersonating`, o `AppSidebar` exibe apenas itens do backoffice (Plataformas, Usuarios, Modulos, etc.) em vez do menu normal de tenant (Chat, NPS, CS, Help, Contacts). Quando impersonando, volta ao menu normal.
 
-### 1. Redirect no Login (Auth.tsx linha 39)
+## Implementacao
 
-**Risco**: Alterar o redirect pos-login pode afetar todos os usuarios.
+### `AppSidebar.tsx`
 
-**Estrategia segura**: O redirect so muda para master. A logica sera:
-```
-if (authUser && !inviteToken) {
-  // Check isMaster from context — if not loaded yet, default to current behavior
-  navigate("/nps/dashboard", { replace: true });
+Envolver todo o conteudo do `SidebarContent` (linhas 163-556) em uma condicional:
+
+```text
+if (isMaster && !isImpersonating) {
+  → Renderizar sidebar do backoffice com items:
+    - Painel Master (/backoffice) — default tab "tenants"
+    - Plataformas (/backoffice?tab=tenants)
+    - Usuarios (/backoffice?tab=users)
+    - Modulos (/backoffice?tab=modules)
+    - Comparativo (/backoffice?tab=benchmark)
+    - Performance (/backoffice?tab=performance)
+    - Health Check (/backoffice?tab=health)
+    - Timeline (/backoffice?tab=timeline)
+    - Metricas (/backoffice?tab=metrics)
+    - Configuracoes (/backoffice?tab=settings)
+    - Operacoes (/backoffice?tab=operations)
+} else {
+  → Menu normal atual (Home, Chat, NPS, CS, Contacts, Help, Backoffice collapsible)
 }
 ```
-O redirect para `/backoffice` sera feito **dentro do SidebarLayout** apos os dados de role ja estarem carregados, nao no Auth.tsx. Assim o Auth.tsx NAO MUDA — zero risco para tenants.
 
-### 2. SidebarLayout.tsx (linhas 36-43)
+Os items do sidebar master usam query params `?tab=X` para selecionar a aba no `Backoffice.tsx`.
 
-**Risco**: Adicionar logica de redirect para master pode quebrar o fluxo de tenants.
+### `Backoffice.tsx`
 
-**Estrategia segura**: A verificacao sera estritamente `if (isMaster && !isImpersonating && !location.pathname.startsWith('/backoffice'))`. Usuarios de tenant nunca terao `isMaster = true` (vem da tabela `user_roles` com role `master`), entao essa condicao nunca sera verdadeira para eles.
+Ler `tab` da URL search params e usar como `defaultValue` do `<Tabs>`:
 
-### 3. Rotas no App.tsx
+```typescript
+const [searchParams] = useSearchParams();
+const activeTab = searchParams.get("tab") || "tenants";
+// <Tabs value={activeTab} onValueChange={...}>
+```
 
-**Risco**: Adicionar rotas pode conflitar com rotas existentes.
+Ao trocar de tab, atualizar a URL com `setSearchParams({ tab: newTab })`.
 
-**Estrategia segura**: As novas rotas ficam DENTRO do mesmo `<Route element={<SidebarLayout />}>` existente, usando o prefixo `/backoffice/*` que nao colide com nenhuma rota existente. O `Guarded` com `requireMaster` ja existe e ja e usado na rota atual `/backoffice`. Nenhuma rota existente sera movida ou alterada.
+Remover o `PageHeader` e a `TabsList` visual (ja que a navegacao agora e pelo sidebar). Manter apenas os `TabsContent`.
 
-### 4. AppSidebar.tsx
+### Footer do sidebar
 
-**Risco**: Remover a secao backoffice do sidebar pode afetar a navegacao.
+Manter o footer (perfil, tema, idioma, logout) identico para ambos os modos.
 
-**Estrategia segura**: NAO remover nada do AppSidebar. O master continuara vendo o item "Backoffice" no sidebar como hoje. A diferenca e que ao clicar, ele vai para o `/backoffice` que tera o layout expandido. Tenants nunca veem esse item (ja esta protegido por `isMaster`).
+### Header do sidebar
 
-### 5. Migration para `tenant_modules`
+Logo clica para `/backoffice` quando master (em vez de `/admin/dashboard`).
 
-**Risco**: Nova tabela com RLS pode causar erros.
+## Arquivos
 
-**Estrategia segura**: A tabela e completamente nova e isolada. Nenhuma tabela existente sera alterada. O `AppSidebar` so consultara `tenant_modules` se a tabela existir e tiver dados — caso contrario, todos os modulos continuam visiveis (fallback permissivo). Isso significa que ate o master configurar modulos para um tenant, nada muda.
+| Arquivo | Mudanca |
+|---|---|
+| `src/components/AppSidebar.tsx` | Condicional master vs tenant no SidebarContent + header click |
+| `src/pages/Backoffice.tsx` | Tabs controladas por URL params, remover TabsList visual |
 
-### 6. Realtime/Performance
+## Impacto em tenants
 
-**Risco**: Novos componentes do backoffice podem gerar carga adicional.
-
-**Estrategia segura**: Todos os dados do backoffice serao carregados sob demanda (clique em tab) com `staleTime` alto. O unico canal realtime novo sera para a Timeline, e so existira enquanto o master estiver na aba de Timeline. Tenants nao carregam nenhum desses componentes.
-
-## Resumo de Arquivos
-
-| Arquivo | Tipo de Mudanca | Impacto em Tenants |
-|---|---|---|
-| `Auth.tsx` | **SEM MUDANCA** | Zero |
-| `SidebarLayout.tsx` | Adicionar 3 linhas de redirect condicional (isMaster only) | Zero — condicao nunca verdadeira para tenants |
-| `App.tsx` | Adicionar sub-rotas `/backoffice/*` | Zero — rotas novas, protegidas por requireMaster |
-| `AppSidebar.tsx` | **SEM MUDANCA** | Zero |
-| Novos componentes master/* | Arquivos novos | Zero — nunca importados por paginas de tenant |
-| Migration tenant_modules | Tabela nova, sem ALTER em tabelas existentes | Zero — fallback permissivo |
-
-## Principio de Seguranca
-
-Toda logica nova esta protegida por `isMaster === true`, que e derivado de `user_roles.role = 'master'`. Apenas o usuario `mcampos.mauricio@gmail.com` tem esse role. Nenhum codigo de tenant carrega, importa ou executa componentes do backoffice master.
+Zero. A condicional `isMaster && !isImpersonating` nunca e verdadeira para usuarios de tenant.
 
