@@ -288,6 +288,7 @@ const UserPortal = () => {
       status: "waiting",
       closed_at: null,
       resolution_status: null,
+      updated_at: new Date().toISOString(),
     }).eq("id", roomId);
 
     await supabase.from("chat_messages").insert({
