@@ -171,6 +171,7 @@ interface VisitorInfoPanelProps {
   contactId?: string | null;
   companyContactId?: string | null;
   displaySettings?: WorkspaceDisplaySettings;
+  activeRoomId?: string;
 }
 
 function getHealthColor(score: number) {
