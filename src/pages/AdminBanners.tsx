@@ -1660,7 +1660,7 @@ const AdminBanners = () => {
                       ))}
                     </TableBody>
                   </Table>
-                </ScrollArea>
+                </div>
               </div>
             );
           })()}
