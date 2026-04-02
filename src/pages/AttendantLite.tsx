@@ -266,7 +266,7 @@ const AttendantLite = () => {
   };
 
   // Auth + permission guard
-  if (userDataLoading) {
+  if (userDataLoading || loading) {
     return (
       <div className="h-[100dvh] flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
