@@ -219,6 +219,9 @@ const AdminBanners = () => {
   const [metricsDialog, setMetricsDialog] = useState(false);
   const [metricsBanner, setMetricsBanner] = useState<Banner | null>(null);
   const [metricsAssignments, setMetricsAssignments] = useState<Assignment[]>([]);
+  const [metricsSearch, setMetricsSearch] = useState("");
+  const [metricsFilterStatus, setMetricsFilterStatus] = useState("all");
+  const [metricsFilterVote, setMetricsFilterVote] = useState("all");
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [bannerDialog, setBannerDialog] = useState(false);
