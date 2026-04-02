@@ -21,6 +21,7 @@ import NPSEmbed from "./pages/NPSEmbed";
 import NotFound from "./pages/NotFound";
 import ChatWidget from "./pages/ChatWidget";
 import AdminWorkspace from "./pages/AdminWorkspace";
+import AttendantLite from "./pages/AttendantLite";
 import PendingApproval from "./pages/PendingApproval";
 import UserPortal from "./pages/UserPortal";
 import SidebarLayout from "./components/SidebarLayout";
