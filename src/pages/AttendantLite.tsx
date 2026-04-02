@@ -35,7 +35,7 @@ function durationLabel(startedAt: string): string {
 
 const AttendantLite = () => {
   const navigate = useNavigate();
-  const { user, tenantId, hasPermission, userDataLoading } = useAuth();
+  const { user, tenantId, hasPermission, userDataLoading, loading } = useAuth();
   const { broadcastEvent, onRoomStatusChange } = useTenantRealtime();
 
   const [userAttendantId, setUserAttendantId] = useState<string | null>(null);
