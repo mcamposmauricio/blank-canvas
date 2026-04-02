@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, AlertCircle } from "lucide-react";
+import { ChevronRight, AlertCircle, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,11 +29,13 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [open, setOpen] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const fetchPendingRooms = useCallback(async (pageNum = 0, append = false) => {
     if (!attendantId) return;
 
+    setLoading(true);
     const from = pageNum * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
@@ -47,7 +49,7 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
       .range(from, to);
 
     if (count !== null) setTotalCount(count);
-    if (!data) { if (!append) setRooms([]); return; }
+    if (!data) { if (!append) setRooms([]); setLoading(false); return; }
 
     const roomIds = data.map((r: any) => r.id);
     let lastMessages: Record<string, string> = {};
@@ -80,12 +82,36 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
     }));
 
     setRooms(prev => append ? [...prev, ...mapped] : mapped);
+    setLoading(false);
   }, [attendantId]);
 
   useEffect(() => {
     setPage(0);
     fetchPendingRooms(0);
   }, [attendantId, fetchPendingRooms, refreshTrigger]);
+
+  // Infinite scroll via IntersectionObserver
+  const hasMore = rooms.length < totalCount;
+
+  useEffect(() => {
+    if (!open || !hasMore || loading) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !loading) {
+          const nextPage = page + 1;
+          setPage(nextPage);
+          fetchPendingRooms(nextPage, true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [open, hasMore, loading, page, fetchPendingRooms]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
@@ -94,8 +120,6 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
   };
 
   if (totalCount === 0 && rooms.length === 0) return null;
-
-  const hasMore = rooms.length < totalCount;
 
   return (
     <div className="px-1 mb-2">
@@ -109,7 +133,12 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
           </Badge>
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-1">
-          <ScrollArea className="max-h-[300px]">
+          {rooms.length > 0 && (
+            <p className="text-[10px] text-muted-foreground px-2 mb-1">
+              Exibindo {rooms.length} de {totalCount}
+            </p>
+          )}
+          <ScrollArea className="max-h-[400px]">
             <div className="space-y-0.5">
               {rooms.map((room) => (
                 <button
@@ -134,7 +163,14 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
                   )}
                 </button>
               ))}
-              {hasMore && (
+              {/* Sentinel for infinite scroll */}
+              {hasMore && <div ref={sentinelRef} className="h-1" />}
+              {loading && (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {hasMore && !loading && (
                 <button
                   onClick={handleLoadMore}
                   className="w-full text-center py-1.5 text-xs text-primary hover:underline"

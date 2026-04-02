@@ -1550,11 +1550,17 @@ const AdminBanners = () => {
 
           {/* Filtered Table */}
           {(() => {
-            const [searchMetrics, setSearchMetrics] = [metricsSearch ?? "", setMetricsSearch ?? (() => {})];
-            const [filterStatus, setFilterStatus] = [metricsFilterStatus ?? "all", setMetricsFilterStatus ?? (() => {})];
-            const [filterVote, setFilterVote] = [metricsFilterVote ?? "all", setMetricsFilterVote ?? (() => {})];
-
             const filtered = metricsAssignments
+              .filter(a => {
+                if (metricsSearch && !(a.contact_name?.toLowerCase().includes(metricsSearch.toLowerCase()) || a.contact_email?.toLowerCase().includes(metricsSearch.toLowerCase()))) return false;
+                if (metricsFilterStatus === "active" && a.dismissed_at) return false;
+                if (metricsFilterStatus === "dismissed" && !a.dismissed_at) return false;
+                if (metricsFilterVote === "up" && a.vote !== "up") return false;
+                if (metricsFilterVote === "down" && a.vote !== "down") return false;
+                if (metricsFilterVote === "none" && a.vote) return false;
+                return true;
+              })
+              .sort((a, b) => b.views_count - a.views_count);
               .filter(a => {
                 if (searchMetrics && !(a.contact_name?.toLowerCase().includes(searchMetrics.toLowerCase()) || a.contact_email?.toLowerCase().includes(searchMetrics.toLowerCase()))) return false;
                 if (filterStatus === "active" && a.dismissed_at) return false;
