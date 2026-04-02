@@ -126,6 +126,7 @@ const App = () => (
           {/* Chat Widget (public) */}
           <Route path="/widget" element={<ChatWidget />} />
           <Route path="/pending-approval" element={<PendingApproval />} />
+          <Route path="/attendant" element={<AttendantLite />} />
           <Route path="/portal/:token" element={<UserPortal />} />
           
           {/* Auth & NPS Response */}
