@@ -1561,16 +1561,6 @@ const AdminBanners = () => {
                 return true;
               })
               .sort((a, b) => b.views_count - a.views_count);
-              .filter(a => {
-                if (searchMetrics && !(a.contact_name?.toLowerCase().includes(searchMetrics.toLowerCase()) || a.contact_email?.toLowerCase().includes(searchMetrics.toLowerCase()))) return false;
-                if (filterStatus === "active" && a.dismissed_at) return false;
-                if (filterStatus === "dismissed" && !a.dismissed_at) return false;
-                if (filterVote === "up" && a.vote !== "up") return false;
-                if (filterVote === "down" && a.vote !== "down") return false;
-                if (filterVote === "none" && a.vote) return false;
-                return true;
-              })
-              .sort((a, b) => b.views_count - a.views_count);
 
             return metricsAssignments.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma atribuição encontrada.</p>
