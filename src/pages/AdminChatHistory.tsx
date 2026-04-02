@@ -136,8 +136,7 @@ const AdminChatHistory = () => {
       }
       if (csm) { await new Promise(r => setTimeout(r, 500)); const { data: ap } = await supabase.from("attendant_profiles").select("id").eq("user_id", user.id).maybeSingle(); attProfile = ap; }
     }
-    await supabase.from("chat_rooms").update({ status: "active", closed_at: null, resolution_status: null, attendant_id: attProfile?.id ?? null, assigned_at: new Date().toISOString() }).eq("id", roomId);
-    if (attProfile) await supabase.from("attendant_profiles").update({ active_conversations: 1 } as any).eq("id", attProfile.id);
+    await supabase.from("chat_rooms").update({ status: "active", closed_at: null, resolution_status: null, attendant_id: attProfile?.id ?? null, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", roomId);
     await supabase.from("chat_messages").insert({ room_id: roomId, sender_type: "system", sender_name: "Sistema", content: `[Sistema] Chat reaberto e atribuído a ${attendantName}`, is_internal: false, metadata: { auto_rule: "chain_reset" } });
     supabase.functions.invoke("assign-chat-room", { body: { room_id: roomId } }).catch(() => {});
     toast.success("Chat reaberto e atribuído a você!"); refetch();

@@ -805,6 +805,7 @@ const ChatWidget = () => {
       status: "active",
       closed_at: null,
       resolution_status: null,
+      updated_at: new Date().toISOString(),
     }).eq("id", reopenRoomId);
 
     // NOTE: active_conversations is handled by the resync_attendant_counter_on_room_change trigger
