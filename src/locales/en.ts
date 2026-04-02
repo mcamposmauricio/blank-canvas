@@ -931,6 +931,7 @@ export default {
   "team.submodule.nps.campaigns": "Campaigns",
   "team.submodule.nps.settings": "NPS Settings",
   "team.submodule.chat.workspace": "Workstation",
+  "team.submodule.chat.workspace.lite": "Lite View",
   "team.submodule.chat.history": "Chat History",
   "team.submodule.chat.banners": "Banners",
   "team.submodule.chat.broadcasts": "Mass Messages",

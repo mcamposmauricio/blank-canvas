@@ -33,6 +33,7 @@ import {
   Clock,
   Terminal,
   Blocks,
+  Smartphone,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -392,6 +393,14 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
                           <SidebarMenuItem>
                             <SidebarMenuButton onClick={() => navigate("/admin/csat")} isActive={isActive("/admin/csat")} tooltip="CSAT" className={cn("pl-6", isActive("/admin/csat") ? activeItemCls : "hover:bg-sidebar-accent")}>
                               <Star className="h-4 w-4" /><span>CSAT</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+
+                        {hasPermission("chat.workspace.lite", "view") && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => navigate("/attendant")} isActive={isActive("/attendant")} tooltip="Atendimento Lite" className={cn("pl-6", isActive("/attendant") ? activeItemCls : "hover:bg-sidebar-accent")}>
+                              <Smartphone className="h-4 w-4" /><span>Atendimento Lite</span>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         )}

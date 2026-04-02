@@ -94,6 +94,7 @@ const PERMISSION_TREE: PermNode[] = [
     actions: ["view", "edit", "delete", "manage"],
     children: [
       { key: "chat.workspace",              labelKey: "team.submodule.chat.workspace",              actions: ["view"] },
+      { key: "chat.workspace.lite",          labelKey: "team.submodule.chat.workspace.lite",          actions: ["view"] },
       { key: "chat.history",                labelKey: "team.submodule.chat.history",                actions: ["view"] },
       { key: "chat.banners",                labelKey: "team.submodule.chat.banners",                actions: ["view", "edit", "delete", "manage"] },
       { key: "chat.broadcasts",             labelKey: "team.submodule.chat.broadcasts",             actions: ["view", "edit", "delete", "manage"] },

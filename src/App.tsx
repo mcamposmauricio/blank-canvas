@@ -21,6 +21,7 @@ import NPSEmbed from "./pages/NPSEmbed";
 import NotFound from "./pages/NotFound";
 import ChatWidget from "./pages/ChatWidget";
 import AdminWorkspace from "./pages/AdminWorkspace";
+import AttendantLite from "./pages/AttendantLite";
 import PendingApproval from "./pages/PendingApproval";
 import UserPortal from "./pages/UserPortal";
 import SidebarLayout from "./components/SidebarLayout";
@@ -125,6 +126,7 @@ const App = () => (
           {/* Chat Widget (public) */}
           <Route path="/widget" element={<ChatWidget />} />
           <Route path="/pending-approval" element={<PendingApproval />} />
+          <Route path="/attendant" element={<AttendantLite />} />
           <Route path="/portal/:token" element={<UserPortal />} />
           
           {/* Auth & NPS Response */}
