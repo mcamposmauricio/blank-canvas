@@ -1,45 +1,67 @@
 
-# Auditoria do Chat — Resultado
 
-## Status Geral: Sistema Funcional com 1 Bug Encontrado
+# Plano: Melhorar Statistics dos Banners + Scroll com Paginacao nos Pendentes
 
-Todos os 18 processos criticos estao operacionais. A arquitetura broadcast + safety net esta correta e completa. Porem ha um bug na edge function `assign-chat-room` que impede o broadcast explicito de funcionar (o safety net compensa, mas com 1-2s de atraso).
+## Problema 1: Statistics do Banner
 
-## Bug: `assign-chat-room` — variavel errada no broadcast
+O dialog de metricas atual (linhas 1443-1530) e apenas uma tabela simples com 4 cards numericos no topo. Falta um mini-dashboard com visualizacao clara de engajamento, funil e tendencias.
 
-**Arquivo**: `supabase/functions/assign-chat-room/index.ts`, linha 161
-**Problema**: O broadcast usa `roomId` (variavel inexistente/undefined) em vez de `room_id` (variavel do request body). O payload enviado fica `{ room_id: undefined, ... }`, que o frontend ignora.
+### Mudancas
 
-```text
-ANTES (bugado):   payload: { room_id: roomId, ...
-CORRETO:          payload: { room_id: room_id, ...
-```
+**Arquivo: `src/pages/AdminBanners.tsx`**
 
-**Impacto**: O broadcast da edge function nao funciona. O frontend ainda recebe o evento via safety net (pg_changes), entao o chat aparece — mas com ~1-2s a mais de latencia ao atribuir salas automaticamente.
+Substituir o dialog de metricas (linhas 1443-1530) por um mini-dashboard com:
 
-## Verificacao Completa
+1. **Header com resumo visual** — 5 MetricCards em grid:
+   - Atribuidos (total)
+   - Views totais
+   - Taxa de visualizacao (views/atribuidos %)
+   - Favorabilidade (up/total votos %)
+   - Dismissed (count + %)
 
-| Componente | Status | Observacao |
-|---|---|---|
-| TenantRealtimeContext | OK | Broadcast + safety net (INSERT, UPDATE, DELETE) + attendants pg_changes |
-| useChatRooms | OK | Consome onRoomStatusChange + onNewMessageActivity corretamente |
-| useChatMessages | OK | Canal scoped `chat-messages-{roomId}` inalterado |
-| useAttendantQueues | OK | Polling 10s + onAttendantUpdate |
-| SidebarDataContext | OK | debouncedResync via broadcast + polling 300s |
-| PendingRoomsList | OK | refreshTrigger prop via onRoomStatusChange |
-| AdminWorkspace broadcasts | OK | handleReopenRoom, handleMarkResolved, handleConfirmClose, handleReassign, handleSendMessage, handleAssignRoom — todos enviam broadcast |
-| ChatWidget visitor channel | OK | Merged INSERT+UPDATE em `widget-visitor-{visitorId}` |
-| Widget messages/room channels | OK | Scoped, inalterados |
-| process-chat-auto-rules | OK | Broadcasts corretos com `room.id` |
-| process-chat-broadcasts | OK | Broadcasts corretos com `room.id` |
-| assign-chat-room | **BUG** | `roomId` em vez de `room_id` na linha 161 |
-| Som/notificacao | OK | Handler em useChatRooms L350-369 |
-| App.tsx wrapper | OK | TenantRealtimeProvider dentro de AuthProvider |
+2. **Barra de funil horizontal** — Visualizacao tipo funnel:
+   - Atribuidos → Visualizaram → Votaram → Dismissed
+   - Cada etapa com barra de progresso proporcional e label
 
-## Correcao
+3. **Breakdown de votos** — Se `has_voting`:
+   - Barra horizontal bicolor (verde positivo / vermelho negativo) com percentuais
+   - Count de cada lado
+
+4. **Tabela compacta** — Manter a tabela existente mas:
+   - Adicionar busca por nome
+   - Adicionar filtro por status (ativo/dismissed) e voto (positivo/negativo/sem)
+   - Scroll interno com altura max de 300px
+   - Ordenacao por views (clicavel no header)
+
+---
+
+## Problema 2: PendingRoomsList sem scroll funcional para volumes grandes
+
+O componente atual tem `ScrollArea` com `max-h-[300px]` mas com muitos itens a paginacao "Carregar mais" fica escondida ou o scroll nao e intuitivo.
+
+### Mudancas
+
+**Arquivo: `src/components/chat/PendingRoomsList.tsx`**
+
+1. Aumentar `max-h` de 300px para `max-h-[400px]` para mais visibilidade
+2. Adicionar **scroll infinito** com `IntersectionObserver` — quando o usuario rola ate o final, carrega automaticamente a proxima pagina (sem precisar clicar "Carregar mais")
+3. Manter o botao "Carregar mais" como fallback caso o observer nao dispare
+4. Adicionar indicador de loading (spinner pequeno) durante carregamento de pagina adicional
+5. Mostrar counter "Exibindo X de Y" no topo da lista para dar contexto
+
+---
+
+## Arquivos Modificados
 
 | Arquivo | Mudanca |
 |---|---|
-| `supabase/functions/assign-chat-room/index.ts` | Linha 161: trocar `roomId` por `room_id` |
+| `src/pages/AdminBanners.tsx` | Redesign do metricsDialog com mini-dashboard, funil, filtros e scroll na tabela |
+| `src/components/chat/PendingRoomsList.tsx` | Scroll infinito com IntersectionObserver + counter + loading indicator |
 
-Correcao de 1 linha, zero risco, deploy automatico.
+## Detalhes Tecnicos
+
+- Funil usa `Progress` component existente com widths proporcionais
+- IntersectionObserver via `useRef` + `useEffect` no ultimo item visivel
+- Sem dependencias novas — tudo com componentes UI existentes (MetricCard nao sera importado no dialog, usara divs styled inline para manter o dialog leve)
+- Zero impacto em outros processos — ambas as mudancas sao puramente visuais/UX
+
