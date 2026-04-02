@@ -630,6 +630,9 @@ const AdminBanners = () => {
       return { ...a, contact_name: contact?.name ?? "—", contact_email: contact?.email ?? "—" };
     });
     setMetricsAssignments(enriched);
+    setMetricsSearch("");
+    setMetricsFilterStatus("all");
+    setMetricsFilterVote("all");
     setMetricsDialog(true);
   };
 
