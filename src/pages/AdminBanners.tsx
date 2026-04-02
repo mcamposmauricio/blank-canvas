@@ -219,6 +219,9 @@ const AdminBanners = () => {
   const [metricsDialog, setMetricsDialog] = useState(false);
   const [metricsBanner, setMetricsBanner] = useState<Banner | null>(null);
   const [metricsAssignments, setMetricsAssignments] = useState<Assignment[]>([]);
+  const [metricsSearch, setMetricsSearch] = useState("");
+  const [metricsFilterStatus, setMetricsFilterStatus] = useState("all");
+  const [metricsFilterVote, setMetricsFilterVote] = useState("all");
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [bannerDialog, setBannerDialog] = useState(false);
@@ -627,6 +630,9 @@ const AdminBanners = () => {
       return { ...a, contact_name: contact?.name ?? "—", contact_email: contact?.email ?? "—" };
     });
     setMetricsAssignments(enriched);
+    setMetricsSearch("");
+    setMetricsFilterStatus("all");
+    setMetricsFilterVote("all");
     setMetricsDialog(true);
   };
 
@@ -1442,90 +1448,215 @@ const AdminBanners = () => {
 
       {/* Metrics Dialog */}
       <Dialog open={metricsDialog} onOpenChange={setMetricsDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Métricas — {metricsBanner?.title}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              Métricas — {metricsBanner?.title}
+            </DialogTitle>
           </DialogHeader>
 
           {(() => {
+            const total = metricsAssignments.length;
             const totalViews = metricsAssignments.reduce((s, a) => s + a.views_count, 0);
+            const viewed = metricsAssignments.filter(a => a.views_count > 0).length;
             const dismissed = metricsAssignments.filter(a => a.dismissed_at).length;
             const voted = metricsAssignments.filter(a => a.vote);
             const upVotes = voted.filter(a => a.vote === "up").length;
+            const downVotes = voted.filter(a => a.vote === "down").length;
+            const viewRate = total > 0 ? Math.round((viewed / total) * 100) : 0;
             const favorability = voted.length > 0 ? Math.round((upVotes / voted.length) * 100) : null;
+            const dismissRate = total > 0 ? Math.round((dismissed / total) * 100) : 0;
+
+            const funnelSteps = [
+              { label: "Atribuídos", value: total, color: "bg-primary" },
+              { label: "Visualizaram", value: viewed, color: "bg-blue-500" },
+              { label: "Votaram", value: voted.length, color: "bg-amber-500" },
+              { label: "Dismissed", value: dismissed, color: "bg-muted-foreground" },
+            ];
+            const funnelMax = Math.max(total, 1);
+
             return (
-              <div className="grid grid-cols-4 gap-3">
-                {[
-                  { label: "Atribuídos", value: metricsAssignments.length },
-                  { label: "Views", value: totalViews },
-                  { label: "Favorabilidade", value: favorability !== null ? `${favorability}%` : "—" },
-                  { label: "Dismissed", value: dismissed },
-                ].map((m) => (
-                  <div key={m.label} className="rounded-lg border bg-muted/20 p-3 text-center">
-                    <p className="text-lg font-bold">{m.value}</p>
-                    <p className="text-[10px] text-muted-foreground">{m.label}</p>
+              <div className="space-y-5">
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {[
+                    { label: "Atribuídos", value: total, icon: Users },
+                    { label: "Views totais", value: totalViews, icon: Eye },
+                    { label: "Taxa de visualização", value: `${viewRate}%`, icon: Eye },
+                    { label: "Favorabilidade", value: favorability !== null ? `${favorability}%` : "—", icon: ThumbsUp },
+                    { label: "Dismissed", value: `${dismissed} (${dismissRate}%)`, icon: ThumbsDown },
+                  ].map((m) => (
+                    <div key={m.label} className="rounded-lg border border-border bg-card p-3 space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <m.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{m.label}</p>
+                      </div>
+                      <p className="text-lg font-semibold tabular-nums">{m.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Funnel */}
+                <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Funil de engajamento</p>
+                  <div className="space-y-2">
+                    {funnelSteps.map((step) => {
+                      const pct = Math.round((step.value / funnelMax) * 100);
+                      return (
+                        <div key={step.label} className="flex items-center gap-3">
+                          <span className="text-xs text-muted-foreground w-24 shrink-0 text-right">{step.label}</span>
+                          <div className="flex-1 h-5 rounded-full bg-muted/30 overflow-hidden relative">
+                            <div
+                              className={cn("h-full rounded-full transition-all", step.color)}
+                              style={{ width: `${Math.max(pct, 2)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium tabular-nums w-16 shrink-0">{step.value} ({pct}%)</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
+                </div>
+
+                {/* Vote Breakdown */}
+                {metricsBanner?.has_voting && voted.length > 0 && (
+                  <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Breakdown de votos</p>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 shrink-0">
+                        <ThumbsUp className="h-3.5 w-3.5" /> {upVotes}
+                      </div>
+                      <div className="flex-1 h-4 rounded-full overflow-hidden flex">
+                        <div
+                          className="bg-emerald-500 h-full transition-all"
+                          style={{ width: `${Math.round((upVotes / voted.length) * 100)}%` }}
+                        />
+                        <div
+                          className="bg-destructive h-full transition-all"
+                          style={{ width: `${Math.round((downVotes / voted.length) * 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-destructive shrink-0">
+                        {downVotes} <ThumbsDown className="h-3.5 w-3.5" />
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>{Math.round((upVotes / voted.length) * 100)}% positivo</span>
+                      <span>{Math.round((downVotes / voted.length) * 100)}% negativo</span>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
 
-          {metricsAssignments.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhuma atribuição encontrada.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Views</TableHead>
-                  <TableHead>Voto</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {metricsAssignments
-                  .sort((a, b) => b.views_count - a.views_count)
-                  .map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium text-sm">{a.contact_name}</p>
-                          <p className="text-xs text-muted-foreground">{a.contact_email}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <span className="text-sm">{a.views_count}</span>
-                          {metricsBanner?.max_views && (
-                            <Progress value={(a.views_count / metricsBanner.max_views) * 100} className="h-1.5 w-16" />
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {a.vote === "up" ? (
-                          <Badge variant="outline" className="text-emerald-600 border-emerald-300 dark:text-emerald-400 dark:border-emerald-700 text-[10px]">
-                            <ThumbsUp className="h-3 w-3 mr-1" /> Positivo
-                          </Badge>
-                        ) : a.vote === "down" ? (
-                          <Badge variant="outline" className="text-destructive border-destructive/30 text-[10px]">
-                            <ThumbsDown className="h-3 w-3 mr-1" /> Negativo
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {a.dismissed_at ? (
-                          <Badge variant="secondary" className="text-[10px]">Dismissed</Badge>
-                        ) : (
-                          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 text-[10px]">Ativo</Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          )}
+          {/* Filtered Table */}
+          {(() => {
+            const filtered = metricsAssignments
+              .filter(a => {
+                if (metricsSearch && !(a.contact_name?.toLowerCase().includes(metricsSearch.toLowerCase()) || a.contact_email?.toLowerCase().includes(metricsSearch.toLowerCase()))) return false;
+                if (metricsFilterStatus === "active" && a.dismissed_at) return false;
+                if (metricsFilterStatus === "dismissed" && !a.dismissed_at) return false;
+                if (metricsFilterVote === "up" && a.vote !== "up") return false;
+                if (metricsFilterVote === "down" && a.vote !== "down") return false;
+                if (metricsFilterVote === "none" && a.vote) return false;
+                return true;
+              })
+              .sort((a, b) => b.views_count - a.views_count);
+
+            return metricsAssignments.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhuma atribuição encontrada.</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative flex-1 min-w-[180px]">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar empresa..."
+                      className="pl-8 h-8 text-xs"
+                      value={metricsSearch}
+                      onChange={(e) => setMetricsSearch(e.target.value)}
+                    />
+                  </div>
+                  <Select value={metricsFilterStatus} onValueChange={setMetricsFilterStatus}>
+                    <SelectTrigger className="w-[120px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="active">Ativos</SelectItem>
+                      <SelectItem value="dismissed">Dismissed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={metricsFilterVote} onValueChange={setMetricsFilterVote}>
+                    <SelectTrigger className="w-[120px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos votos</SelectItem>
+                      <SelectItem value="up">Positivo</SelectItem>
+                      <SelectItem value="down">Negativo</SelectItem>
+                      <SelectItem value="none">Sem voto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-[10px] text-muted-foreground">{filtered.length} de {metricsAssignments.length} registros</p>
+                <ScrollArea className="max-h-[300px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Empresa</TableHead>
+                        <TableHead className="text-xs">Views</TableHead>
+                        <TableHead className="text-xs">Voto</TableHead>
+                        <TableHead className="text-xs">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((a) => (
+                        <TableRow key={a.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium text-sm">{a.contact_name}</p>
+                              <p className="text-xs text-muted-foreground">{a.contact_email}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <span className="text-sm tabular-nums">{a.views_count}</span>
+                              {metricsBanner?.max_views && (
+                                <Progress value={(a.views_count / metricsBanner.max_views) * 100} className="h-1.5 w-16" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {a.vote === "up" ? (
+                              <Badge variant="outline" className="text-emerald-600 border-emerald-300 dark:text-emerald-400 dark:border-emerald-700 text-[10px]">
+                                <ThumbsUp className="h-3 w-3 mr-1" /> Positivo
+                              </Badge>
+                            ) : a.vote === "down" ? (
+                              <Badge variant="outline" className="text-destructive border-destructive/30 text-[10px]">
+                                <ThumbsDown className="h-3 w-3 mr-1" /> Negativo
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {a.dismissed_at ? (
+                              <Badge variant="secondary" className="text-[10px]">Dismissed</Badge>
+                            ) : (
+                              <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 text-[10px]">Ativo</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </>
