@@ -171,6 +171,7 @@ interface VisitorInfoPanelProps {
   contactId?: string | null;
   companyContactId?: string | null;
   displaySettings?: WorkspaceDisplaySettings;
+  activeRoomId?: string;
 }
 
 function getHealthColor(score: number) {
@@ -207,7 +208,7 @@ function ClickableValue({ value, type }: { value: string; type?: string }) {
   return <span className="truncate">{value}</span>;
 }
 
-export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, companyContactId: propCompanyContactId, displaySettings }: VisitorInfoPanelProps) {
+export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, companyContactId: propCompanyContactId, displaySettings, activeRoomId }: VisitorInfoPanelProps) {
   const s = displaySettings ?? DEFAULT_SETTINGS;
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -782,13 +783,13 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
           })()}
 
           {/* ÚLTIMOS CHATS */}
-          {s.ws_show_recent_chats && recentChats.length > 0 && (
+          {s.ws_show_recent_chats && recentChats.filter((c) => c.id !== activeRoomId).length > 0 && (
             <section className="border-t border-border pt-3">
               <SectionLabel className="flex items-center gap-1">
                 <Clock className="h-3 w-3" /> Últimos Chats
               </SectionLabel>
               <div className="space-y-1.5">
-                {recentChats.map((chat) => (
+                {recentChats.filter((c) => c.id !== activeRoomId).map((chat) => (
                   <button
                     key={chat.id}
                     onClick={() => setReadOnlyRoom({ id: chat.id, name: visitor?.name ?? "Visitante" })}

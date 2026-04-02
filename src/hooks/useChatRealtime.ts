@@ -120,8 +120,9 @@ export function useChatMessages(roomId: string | null) {
 
     if (!roomId) return;
 
+    const channelSuffix = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`chat-messages-${roomId}`)
+      .channel(`chat-messages-${roomId}-${channelSuffix}`)
       .on(
         "postgres_changes",
         {
