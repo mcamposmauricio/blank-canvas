@@ -35,7 +35,7 @@ function durationLabel(startedAt: string): string {
 
 const AttendantLite = () => {
   const navigate = useNavigate();
-  const { user, tenantId, hasPermission, userDataLoading } = useAuth();
+  const { user, tenantId, hasPermission, userDataLoading, loading } = useAuth();
   const { broadcastEvent, onRoomStatusChange } = useTenantRealtime();
 
   const [userAttendantId, setUserAttendantId] = useState<string | null>(null);
@@ -266,7 +266,7 @@ const AttendantLite = () => {
   };
 
   // Auth + permission guard
-  if (userDataLoading) {
+  if (userDataLoading || loading) {
     return (
       <div className="h-[100dvh] flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
