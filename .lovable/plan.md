@@ -1,30 +1,67 @@
 
 
-# Plano Revisado: Scroll na Tabela + Exclusao de Testes no Banco
+# Plano: Melhorar Statistics dos Banners + Scroll com Paginacao nos Pendentes
 
-## 1. Scroll na tabela de empresas do Statistics
+## Problema 1: Statistics do Banner
+
+O dialog de metricas atual (linhas 1443-1530) e apenas uma tabela simples com 4 cards numericos no topo. Falta um mini-dashboard com visualizacao clara de engajamento, funil e tendencias.
+
+### Mudancas
 
 **Arquivo: `src/pages/AdminBanners.tsx`**
 
-Substituir o `ScrollArea` (linha 1605) por `div` com `overflow-y-auto max-h-[350px]` e adicionar `sticky top-0 bg-background z-10` no `TableHeader` para manter cabecalho fixo durante scroll.
+Substituir o dialog de metricas (linhas 1443-1530) por um mini-dashboard com:
 
-## 2. Excluir registros de teste diretamente no banco
+1. **Header com resumo visual** — 5 MetricCards em grid:
+   - Atribuidos (total)
+   - Views totais
+   - Taxa de visualizacao (views/atribuidos %)
+   - Favorabilidade (up/total votos %)
+   - Dismissed (count + %)
 
-**Arquivo: `src/pages/AdminBanners.tsx`** (funcao `openMetricsDialog`, linhas 620-637)
+2. **Barra de funil horizontal** — Visualizacao tipo funnel:
+   - Atribuidos → Visualizaram → Votaram → Dismissed
+   - Cada etapa com barra de progresso proporcional e label
 
-Ao buscar os assignments, fazer query adicional para identificar `contact_id`s com chats fechados nos ultimos 30 minutos:
+3. **Breakdown de votos** — Se `has_voting`:
+   - Barra horizontal bicolor (verde positivo / vermelho negativo) com percentuais
+   - Count de cada lado
 
-```
-chat_rooms WHERE status='closed' AND closed_at >= now()-30min
-```
+4. **Tabela compacta** — Manter a tabela existente mas:
+   - Adicionar busca por nome
+   - Adicionar filtro por status (ativo/dismissed) e voto (positivo/negativo/sem)
+   - Scroll interno com altura max de 300px
+   - Ordenacao por views (clicavel no header)
 
-Cruzar os `visitor_id` dessas salas com `chat_visitors.company_contact_id` para obter os `contact_id`s de teste. Filtrar esses IDs do array `enriched` antes de setar no state.
+---
 
-Nenhum elemento de UI novo (sem toggle, sem checkbox). Os registros de teste simplesmente nao aparecem nas metricas.
+## Problema 2: PendingRoomsList sem scroll funcional para volumes grandes
+
+O componente atual tem `ScrollArea` com `max-h-[300px]` mas com muitos itens a paginacao "Carregar mais" fica escondida ou o scroll nao e intuitivo.
+
+### Mudancas
+
+**Arquivo: `src/components/chat/PendingRoomsList.tsx`**
+
+1. Aumentar `max-h` de 300px para `max-h-[400px]` para mais visibilidade
+2. Adicionar **scroll infinito** com `IntersectionObserver` — quando o usuario rola ate o final, carrega automaticamente a proxima pagina (sem precisar clicar "Carregar mais")
+3. Manter o botao "Carregar mais" como fallback caso o observer nao dispare
+4. Adicionar indicador de loading (spinner pequeno) durante carregamento de pagina adicional
+5. Mostrar counter "Exibindo X de Y" no topo da lista para dar contexto
+
+---
 
 ## Arquivos Modificados
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/pages/AdminBanners.tsx` | Scroll com header sticky na tabela + filtro silencioso de contact_ids com chats fechados recentemente |
+| `src/pages/AdminBanners.tsx` | Redesign do metricsDialog com mini-dashboard, funil, filtros e scroll na tabela |
+| `src/components/chat/PendingRoomsList.tsx` | Scroll infinito com IntersectionObserver + counter + loading indicator |
+
+## Detalhes Tecnicos
+
+- Funil usa `Progress` component existente com widths proporcionais
+- IntersectionObserver via `useRef` + `useEffect` no ultimo item visivel
+- Sem dependencias novas — tudo com componentes UI existentes (MetricCard nao sera importado no dialog, usara divs styled inline para manter o dialog leve)
+- Zero impacto em outros processos — ambas as mudancas sao puramente visuais/UX
 
