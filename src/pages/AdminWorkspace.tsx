@@ -562,7 +562,7 @@ const AdminWorkspace = () => {
                       <Button size="icon" variant="ghost" className="h-8 w-8"><Info className="h-4 w-4" /></Button>
                     </SheetTrigger>
                     <SheetContent side="right" className="w-[85vw] p-0">
-                      <VisitorInfoPanel roomId={selectedRoom.id} visitorId={selectedRoom.visitor_id} contactId={selectedRoom.contact_id} companyContactId={selectedRoom.company_contact_id} displaySettings={wsDisplaySettings} />
+                      <VisitorInfoPanel roomId={selectedRoom.id} visitorId={selectedRoom.visitor_id} contactId={selectedRoom.contact_id} companyContactId={selectedRoom.company_contact_id} displaySettings={wsDisplaySettings} activeRoomId={selectedRoom.id} />
                     </SheetContent>
                   </Sheet>
                   {selectedRoom.status === "active" && (
