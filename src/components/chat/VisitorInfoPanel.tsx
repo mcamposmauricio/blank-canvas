@@ -208,7 +208,7 @@ function ClickableValue({ value, type }: { value: string; type?: string }) {
   return <span className="truncate">{value}</span>;
 }
 
-export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, companyContactId: propCompanyContactId, displaySettings }: VisitorInfoPanelProps) {
+export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, companyContactId: propCompanyContactId, displaySettings, activeRoomId }: VisitorInfoPanelProps) {
   const s = displaySettings ?? DEFAULT_SETTINGS;
   const { t } = useLanguage();
   const navigate = useNavigate();
