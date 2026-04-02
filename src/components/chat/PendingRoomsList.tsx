@@ -138,7 +138,7 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
               Exibindo {rooms.length} de {totalCount}
             </p>
           )}
-          <ScrollArea className="max-h-[400px]">
+          <ScrollArea className="h-[300px]">
             <div className="space-y-0.5">
               {rooms.map((room) => (
                 <button

@@ -952,6 +952,7 @@ export default {
   "team.submodule.nps.campaigns": "Campanhas",
   "team.submodule.nps.settings": "Configurações NPS",
   "team.submodule.chat.workspace": "Estação de Trabalho",
+  "team.submodule.chat.workspace.lite": "Atendimento Lite",
   "team.submodule.chat.history": "Histórico de Conversas",
   "team.submodule.chat.banners": "Banners",
   "team.submodule.chat.broadcasts": "Mensagens em Massa",
