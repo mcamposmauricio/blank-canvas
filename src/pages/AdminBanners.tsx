@@ -1609,9 +1609,9 @@ const AdminBanners = () => {
                   </Select>
                 </div>
                 <p className="text-[10px] text-muted-foreground">{filtered.length} de {metricsAssignments.length} registros</p>
-                <ScrollArea className="max-h-[300px]">
+                <div className="overflow-y-auto max-h-[350px] border rounded-md">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="text-xs">Empresa</TableHead>
                         <TableHead className="text-xs">Views</TableHead>
