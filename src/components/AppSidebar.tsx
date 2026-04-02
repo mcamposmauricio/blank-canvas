@@ -33,6 +33,7 @@ import {
   Clock,
   Terminal,
   Blocks,
+  Smartphone,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
