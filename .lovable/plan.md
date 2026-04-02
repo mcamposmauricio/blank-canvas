@@ -1,22 +1,26 @@
 
 
-# Fix: AttendantLite redirects to /auth before auth finishes loading
+# Fix: Não listar o chat ativo nos "Últimos Chats" do VisitorInfoPanel
 
-## Root Cause
+## Problema
 
-`AttendantLite.tsx` line 269 only checks `userDataLoading`, but ignores the initial `loading` state from `useAuth()`. The timing:
+Ao clicar no chat ativo na lista de "Últimos Chats" do painel lateral, a tela fica branca por conflito de canal Realtime. A solução mais limpa é simplesmente não exibir o chat que já está aberto.
 
-1. Component mounts: `loading = true`, `userDataLoading = false`, `user = null`
-2. Guard at line 269 checks `userDataLoading` → false → skips spinner
-3. Guard at line 277 checks `!user` → true → navigates to `/auth`
-4. Auth finishes loading (too late — already redirected)
+## Correção
 
-## Fix
+**`src/components/chat/VisitorInfoPanel.tsx`**
+- Adicionar prop `activeRoomId?: string`
+- Filtrar a lista de chats recentes para excluir o que tem `id === activeRoomId`
 
-**File: `src/pages/AttendantLite.tsx`**
+**`src/pages/AdminWorkspace.tsx`**
+- Passar `activeRoomId={selectedRoomId}` para o `VisitorInfoPanel`
 
-1. Add `loading` to the destructured values from `useAuth()` (line ~42)
-2. Change the loading guard (line 269) to check both: `if (userDataLoading || loading)`
+**`src/hooks/useChatRealtime.ts`**
+- Tornar nome do canal único com sufixo aleatório (prevenção futura de colisões Realtime)
 
-Two-line change, zero risk.
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/chat/VisitorInfoPanel.tsx` | Prop + filtro do chat ativo |
+| `src/pages/AdminWorkspace.tsx` | Passar `activeRoomId` |
+| `src/hooks/useChatRealtime.ts` | Canal com nome único |
 
