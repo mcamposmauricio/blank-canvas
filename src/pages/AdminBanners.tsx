@@ -621,14 +621,21 @@ const AdminBanners = () => {
     setMetricsBanner(banner);
     const contactQuery = supabase.from("contacts").select("id, name, email").eq("is_company", true);
     if (tenantId) contactQuery.eq("tenant_id", tenantId);
-    const [{ data: assignData }, { data: contactsData }] = await Promise.all([
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const recentClosedQuery = supabase.from("chat_rooms").select("contact_id").eq("status", "closed").gte("closed_at", thirtyMinAgo);
+    if (tenantId) recentClosedQuery.eq("tenant_id", tenantId);
+    const [{ data: assignData }, { data: contactsData }, { data: recentClosed }] = await Promise.all([
       supabase.from("chat_banner_assignments").select("*").eq("banner_id", banner.id),
       contactQuery,
+      recentClosedQuery,
     ]);
-    const enriched = (assignData ?? []).map((a: any) => {
-      const contact = (contactsData ?? []).find((c: any) => c.id === a.contact_id);
-      return { ...a, contact_name: contact?.name ?? "—", contact_email: contact?.email ?? "—" };
-    });
+    const testContactIds = new Set((recentClosed ?? []).map((r: any) => r.contact_id).filter(Boolean));
+    const enriched = (assignData ?? [])
+      .filter((a: any) => !testContactIds.has(a.contact_id))
+      .map((a: any) => {
+        const contact = (contactsData ?? []).find((c: any) => c.id === a.contact_id);
+        return { ...a, contact_name: contact?.name ?? "—", contact_email: contact?.email ?? "—" };
+      });
     setMetricsAssignments(enriched);
     setMetricsSearch("");
     setMetricsFilterStatus("all");
