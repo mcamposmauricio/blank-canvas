@@ -96,10 +96,10 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
   const [contactsOpen, handleContactsOpen] = usePersistedState("sidebar-contacts-open");
   const [helpOpen, handleHelpOpen] = usePersistedState("sidebar-help-open");
 
-  const showChat = hasPermission("chat", "view") || hasPermission("chat.workspace", "view") || hasPermission("chat.history", "view") || hasPermission("chat.broadcasts", "view");
-  const showNPS = hasPermission("nps", "view") || hasPermission("nps.dashboard", "view") || hasPermission("nps.campaigns", "view");
-  const showContacts = hasPermission("contacts", "view") || hasPermission("contacts.companies", "view") || hasPermission("contacts.people", "view");
-  const showHelp = hasPermission("help", "view") || hasPermission("help.articles", "view") || hasPermission("help.collections", "view");
+  const showChat = isModuleEnabled('chat') && (hasPermission("chat", "view") || hasPermission("chat.workspace", "view") || hasPermission("chat.history", "view") || hasPermission("chat.broadcasts", "view"));
+  const showNPS = isModuleEnabled('nps') && (hasPermission("nps", "view") || hasPermission("nps.dashboard", "view") || hasPermission("nps.campaigns", "view"));
+  const showContacts = isModuleEnabled('contacts') && (hasPermission("contacts", "view") || hasPermission("contacts.companies", "view") || hasPermission("contacts.people", "view"));
+  const showHelp = isModuleEnabled('help') && (hasPermission("help", "view") || hasPermission("help.articles", "view") || hasPermission("help.collections", "view"));
   const { teamAttendants, otherTeamAttendants, totalActiveChats, otherTeamsTotalChats, unassignedCount } = useSidebarData();
 
   const isActive = (path: string) => location.pathname === path;
