@@ -25,6 +25,7 @@ interface AuthContextType {
   tenantId: string | null;
   permissions: UserPermission[];
   hasPermission: (module: string, action: 'view' | 'edit' | 'delete' | 'manage') => boolean;
+  isModuleEnabled: (module: string) => boolean;
   // Multi-tenant
   availableTenants: TenantOption[];
   selectTenant: (tenantId: string) => void;
