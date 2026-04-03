@@ -12,6 +12,7 @@ export interface RoomStatusPayload {
   priority?: string | null;
   closed_at?: string | null;
   assigned_at?: string | null;
+  visitor_last_read_at?: string | null;
 }
 
 export interface NewMessageActivityPayload {
