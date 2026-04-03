@@ -82,10 +82,17 @@ const AttendantLite = () => {
     })();
   }, [user]);
 
-  // Realtime room status changes
+  // Debounced pendingRefreshTrigger (10s)
   useEffect(() => {
-    const unsub = onRoomStatusChange(() => setPendingRefreshTrigger((p) => p + 1));
-    return unsub;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = onRoomStatusChange(() => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => setPendingRefreshTrigger((p) => p + 1), 10000);
+    });
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsub();
+    };
   }, [onRoomStatusChange]);
 
   // Typing indicator
