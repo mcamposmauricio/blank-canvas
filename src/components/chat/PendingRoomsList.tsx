@@ -86,8 +86,12 @@ export function PendingRoomsList({ attendantId, selectedRoomId, onSelectRoom, re
   }, [attendantId]);
 
   useEffect(() => {
-    setPage(0);
-    fetchPendingRooms(0);
+    // Debounce refreshTrigger changes by 5s to coalesce rapid events
+    const timer = setTimeout(() => {
+      setPage(0);
+      fetchPendingRooms(0);
+    }, refreshTrigger === 0 ? 0 : 5000);
+    return () => clearTimeout(timer);
   }, [attendantId, fetchPendingRooms, refreshTrigger]);
 
   // Infinite scroll via IntersectionObserver

@@ -89,12 +89,17 @@ const AdminWorkspace = () => {
 
   // Polling moved to SidebarLayout for reliability (runs even without Workspace open)
 
-  // Increment pendingRefreshTrigger when rooms change (for PendingRoomsList)
+  // Debounced increment of pendingRefreshTrigger (10s) when rooms change
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const unsub = onRoomStatusChange(() => {
-      setPendingRefreshTrigger(prev => prev + 1);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => setPendingRefreshTrigger(prev => prev + 1), 10000);
     });
-    return unsub;
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsub();
+    };
   }, [onRoomStatusChange]);
 
   // Request browser notification permission
@@ -205,20 +210,16 @@ const AdminWorkspace = () => {
       })
       .subscribe();
 
-    // Subscribe to room updates for visitor_last_read_at changes
-    const roomChannel = supabase
-      .channel(`workspace-room-read-${selectedRoomId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_rooms", filter: `id=eq.${selectedRoomId}` }, (payload) => {
-        const room = payload.new as any;
-        if (room.visitor_last_read_at) {
-          setVisitorLastReadAt(room.visitor_last_read_at);
-        }
-      })
-      .subscribe();
+    // Listen for visitor_last_read_at via TenantRealtime safety net (no extra pg_changes channel)
+    const unsubRead = onRoomStatusChange((payload) => {
+      if (payload.room_id === selectedRoomId && payload.visitor_last_read_at) {
+        setVisitorLastReadAt(payload.visitor_last_read_at);
+      }
+    });
 
     return () => {
       supabase.removeChannel(channel);
-      supabase.removeChannel(roomChannel);
+      unsubRead();
     };
   }, [selectedRoomId, user?.id]);
 

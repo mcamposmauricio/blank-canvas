@@ -416,41 +416,7 @@ export function VisitorInfoPanel({ roomId, visitorId, contactId: propContactId, 
     fetchData();
   }, [visitorId, propContactId, propCompanyContactId]);
 
-  // Realtime subscription for auto-refresh when contact/visitor data changes
-  useEffect(() => {
-    const resolvedContactId = propContactId || visitor?.contact_id;
-    const resolvedVisitorId = visitorId;
-    if (!resolvedContactId && !resolvedVisitorId) return;
-
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const debouncedRefresh = () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => fetchData(true), 2000);
-    };
-
-    const channel = supabase.channel(`visitor-panel-${resolvedVisitorId}`);
-
-    if (resolvedContactId) {
-      channel.on(
-        "postgres_changes" as any,
-        { event: "UPDATE", schema: "public", table: "contacts", filter: `id=eq.${resolvedContactId}` },
-        debouncedRefresh
-      );
-    }
-
-    channel.on(
-      "postgres_changes" as any,
-      { event: "UPDATE", schema: "public", table: "chat_visitors", filter: `id=eq.${resolvedVisitorId}` },
-      debouncedRefresh
-    );
-
-    channel.subscribe();
-
-    return () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      supabase.removeChannel(channel);
-    };
-  }, [visitorId, propContactId, visitor?.contact_id]);
+  // pg_changes listener removed for performance — data refreshes on room switch and manual edits
 
   if (loading) {
     return (

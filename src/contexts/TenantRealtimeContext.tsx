@@ -12,6 +12,7 @@ export interface RoomStatusPayload {
   priority?: string | null;
   closed_at?: string | null;
   assigned_at?: string | null;
+  visitor_last_read_at?: string | null;
 }
 
 export interface NewMessageActivityPayload {
@@ -147,6 +148,7 @@ export function TenantRealtimeProvider({ children }: { children: ReactNode }) {
               priority: updated.priority as string | null,
               closed_at: updated.closed_at as string | null,
               assigned_at: updated.assigned_at as string | null,
+              visitor_last_read_at: updated.visitor_last_read_at as string | null,
             };
             roomStatusCallbacks.current.forEach(cb => cb(statusPayload, "pg"));
 
@@ -205,7 +207,7 @@ export function TenantRealtimeProvider({ children }: { children: ReactNode }) {
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
           table: "attendant_profiles",
           ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),

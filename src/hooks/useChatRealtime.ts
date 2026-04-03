@@ -135,21 +135,7 @@ export function useChatMessages(roomId: string | null) {
           setMessages((prev) => [...prev, payload.new as ChatMessage]);
         }
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "chat_messages",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          const updated = payload.new as ChatMessage;
-          setMessages((prev) =>
-            prev.map((m) => (m.id === updated.id ? updated : m))
-          );
-        }
-      )
+      // UPDATE listener removed for performance — soft-deletes handled on room switch refetch
       .subscribe();
 
     return () => {
@@ -485,22 +471,64 @@ export function useAttendantQueues(tenantId?: string | null) {
     setLoading(false);
   }, []);
 
+  const { onRoomStatusChange } = useTenantRealtime();
+
   useEffect(() => {
     fetchQueues();
 
-    // Polling fallback every 10s instead of pg_changes channel
-    const interval = setInterval(fetchQueues, 10000);
+    // Safety net: reconcile every 120s instead of 10s polling
+    const interval = setInterval(fetchQueues, 120000);
 
-    // Also listen for attendant updates via broadcast for immediate refresh
-    const unsub = onAttendantUpdate(() => {
-      fetchQueues();
+    // Inline update for attendant changes (no refetch)
+    const unsubAtt = onAttendantUpdate((payload) => {
+      setAttendants((prev) =>
+        prev.map((a) =>
+          a.id === payload.attendant_id
+            ? {
+                ...a,
+                status: payload.status ?? a.status,
+                active_count: payload.active_conversations ?? a.active_count,
+                display_name: payload.display_name ?? a.display_name,
+              }
+            : a
+        )
+      );
+    });
+
+    // Inline update for unassigned rooms when room status/attendant changes
+    const unsubRoom = onRoomStatusChange((payload) => {
+      const roomId = payload.room_id;
+
+      // Room deleted or closed — remove from unassigned
+      if (payload.status === "_deleted" || payload.status === "closed") {
+        setUnassignedRooms((prev) => prev.filter((r) => r.id !== roomId));
+        return;
+      }
+
+      // Room got assigned — remove from unassigned
+      if (payload.attendant_id) {
+        setUnassignedRooms((prev) => prev.filter((r) => r.id !== roomId));
+        return;
+      }
+
+      // Room is active/waiting with no attendant — might be new unassigned
+      if ((payload.status === "active" || payload.status === "waiting") && !payload.attendant_id) {
+        setUnassignedRooms((prev) => {
+          if (prev.some((r) => r.id === roomId)) return prev;
+          return [
+            ...prev,
+            { id: roomId, visitor_name: "Visitante", created_at: payload.updated_at ?? new Date().toISOString(), status: payload.status ?? "waiting" },
+          ];
+        });
+      }
     });
 
     return () => {
       clearInterval(interval);
-      unsub();
+      unsubAtt();
+      unsubRoom();
     };
-  }, [fetchQueues, onAttendantUpdate]);
+  }, [fetchQueues, onAttendantUpdate, onRoomStatusChange]);
 
   return { attendants, unassignedRooms, loading, refetch: fetchQueues };
 }
