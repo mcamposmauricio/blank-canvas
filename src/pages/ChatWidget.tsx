@@ -438,13 +438,203 @@ const ChatWidget = () => {
     setLoadingMore(false);
   };
 
+  // === Consolidated Realtime Channel (Phase 3 - Fix 3.1) ===
+  // Unifies 3 separate pg_changes channels into 1, reducing WAL polling connections per visitor from 3 to 1.
   useEffect(() => {
-    if (!roomId) return;
+    if (!visitorId) return;
 
-    fetchMessages(roomId);
+    if (roomId) fetchMessages(roomId);
+
+    const suffix = Math.random().toString(36).slice(2, 8);
+    let channelBuilder = supabase.channel(`widget-realtime-${visitorId}-${suffix}`);
+
+    // --- chat_messages listeners (only when roomId exists) ---
+    if (roomId) {
+      channelBuilder = channelBuilder
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` }, (payload) => {
+          const msg = payload.new as any;
+          if (!msg.is_internal && !msg.deleted_at) {
+            if (msg.sender_type === "attendant") {
+              try {
+                const audio = new Audio(
+                  "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
+                );
+                audio.volume = 0.25;
+                audio.play().catch(() => {});
+              } catch {}
+              if (!isOpenRef.current) {
+                setUnreadCount(prev => {
+                  const next = prev + 1;
+                  if (isEmbed) {
+                    window.parent.postMessage({ type: "chat-unread-count", count: next }, "*");
+                  }
+                  return next;
+                });
+              }
+            }
+            setMessages((prev) => {
+              const withoutOptimistic = prev.filter((m) => !m.id.startsWith("optimistic-"));
+              if (withoutOptimistic.some((m) => m.id === msg.id)) return withoutOptimistic;
+              return [...withoutOptimistic, msg];
+            });
+            if (isOpenRef.current && (msg.sender_type === "attendant" || msg.sender_type === "system")) {
+              supabase.from("chat_rooms").update({ visitor_last_read_at: new Date().toISOString() }).eq("id", roomId!).then(() => {});
+            }
+          }
+        })
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` }, (payload) => {
+          const msg = payload.new as any;
+          if (msg.deleted_at) {
+            setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+          }
+        })
+        // --- chat_rooms UPDATE by roomId ---
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_rooms", filter: `id=eq.${roomId}` }, async (payload) => {
+          const room = payload.new as any;
+          if (room.status === "active" && phase === "waiting") {
+            setAllBusy(false);
+            setPhase("chat");
+            postMsg("chat-connected");
+            if (room.attendant_id) {
+              const { data: att } = await supabase
+                .from("attendant_profiles")
+                .select("display_name")
+                .eq("id", room.attendant_id)
+                .maybeSingle();
+              setAttendantName(att?.display_name ?? null);
+            }
+          } else if (room.status === "closed") {
+            const resStatus = room.resolution_status;
+            if (resStatus === "resolved") {
+              setPhase("csat");
+              setAttendantName(null);
+            } else if (resStatus === "archived") {
+              if (isResolvedVisitor) {
+                handleBackToHistory();
+              } else {
+                setPhase("closed");
+              }
+              setAttendantName(null);
+            } else if (resStatus === "pending") {
+              setViewTranscriptResolutionStatus("pending");
+              setPhase("viewTranscript");
+              fetchMessages(room.id);
+              setAttendantName(null);
+            }
+          }
+        });
+    }
+
+    // --- chat_rooms INSERT+UPDATE by visitorId (proactive chats & reopens) ---
+    channelBuilder = channelBuilder
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "chat_rooms",
+        filter: `visitor_id=eq.${visitorId}`,
+      }, async (payload) => {
+        const newRoom = payload.new as any;
+        if (phase !== "chat" && phase !== "waiting" && phase !== "csat") {
+          setRoomId(newRoom.id);
+          setMessages([]);
+          setCsatScore(0);
+          setCsatComment("");
+          if (newRoom.status === "active") {
+            setPhase("chat");
+            if (newRoom.attendant_id) {
+              const { data: att } = await supabase
+                .from("attendant_profiles")
+                .select("display_name")
+                .eq("id", newRoom.attendant_id)
+                .maybeSingle();
+              setAttendantName(att?.display_name ?? null);
+            }
+          } else {
+            setPhase("waiting");
+          }
+          postMsg("chat-ready");
+        }
+        if (!isOpenRef.current || (roomId && roomId !== newRoom.id)) {
+          setUnreadCount(prev => {
+            const next = prev + 1;
+            if (isEmbed) window.parent.postMessage({ type: "chat-unread-count", count: next }, "*");
+            return next;
+          });
+          try {
+            const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E=");
+            audio.volume = 0.25;
+            audio.play().catch(() => {});
+          } catch {}
+        }
+        if (phase === "history") {
+          fetchHistory(visitorId);
+        }
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "chat_rooms",
+        filter: `visitor_id=eq.${visitorId}`,
+      }, async (payload) => {
+        const updatedRoom = payload.new as any;
+        const oldRoom = payload.old as any;
+        if (oldRoom.status === "closed" && (updatedRoom.status === "active" || updatedRoom.status === "waiting")) {
+          if (phase !== "chat" && phase !== "waiting" && phase !== "csat") {
+            setRoomId(updatedRoom.id);
+            setCsatScore(0);
+            setCsatComment("");
+            if (updatedRoom.status === "active") {
+              setPhase("chat");
+              if (updatedRoom.attendant_id) {
+                const { data: att } = await supabase.from("attendant_profiles").select("display_name").eq("id", updatedRoom.attendant_id).maybeSingle();
+                setAttendantName(att?.display_name ?? null);
+              }
+            } else {
+              setPhase("waiting");
+            }
+            postMsg("chat-ready");
+            fetchMessages(updatedRoom.id);
+          }
+          if (!isOpenRef.current || (roomId && roomId !== updatedRoom.id)) {
+            setUnreadCount(prev => {
+              const next = prev + 1;
+              if (isEmbed) window.parent.postMessage({ type: "chat-unread-count", count: next }, "*");
+              return next;
+            });
+            try {
+              const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E=");
+              audio.volume = 0.25;
+              audio.play().catch(() => {});
+            } catch {}
+          }
+          if (phase === "history") fetchHistory(visitorId);
+        }
+      });
+
+    channelBuilder.subscribe();
+
+    return () => { supabase.removeChannel(channelBuilder); };
+  }, [visitorId, roomId, phase, fetchMessages, fetchHistory]);
+
+  // Typing indicator broadcast (kept separate — pure broadcast, zero WAL cost)
+  useEffect(() => {
+    if (!roomId) { setTypingUser(null); return; }
+    setTypingUser(null);
 
     const channel = supabase
-      .channel(`widget-messages-${roomId}`)
+      .channel(`typing-${roomId}`)
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const name = payload.payload?.name;
+        if (name) {
+          setTypingUser(name);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [roomId]);
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` }, (payload) => {
         const msg = payload.new as any;
         if (!msg.is_internal && !msg.deleted_at) {
