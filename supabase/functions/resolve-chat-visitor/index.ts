@@ -429,10 +429,14 @@ async function findOrCreateVisitor(
   const { companyContactId, contactId, name, email, phone, userId, tenantId, customData } = opts;
 
   // Check existing visitor
+  // Use order + limit(1) to always pick the oldest visitor (most history)
+  // This prevents .maybeSingle() from failing when duplicates exist
   const { data: existing } = await supabase
     .from("chat_visitors")
     .select("id, visitor_token, name, email")
     .eq("company_contact_id", companyContactId)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (existing) {
