@@ -1,72 +1,82 @@
 
 
-# Plano: Bateria de Testes Automatizados para Validacao das Otimizacoes
+# Fase 3: Consolidacao de Canais do Widget (mantendo Typing Indicator)
 
-## Objetivo
+## Resumo
 
-Criar testes automatizados que validam que os 7 fixes da Fase 1+2 nao quebraram nenhum fluxo existente: contadores, troca de mensagens, atualizacoes em tempo real, debounces e inline updates.
+Consolida 3 canais `pg_changes` do Widget em 1 unico canal. Typing indicator mantido intacto. Total: 4 canais por visitante reduzidos para 2 (1 pg_changes + 1 broadcast).
 
-## Abordagem
+## Situacao Atual
 
-Testes unitarios com Vitest + mocks do Supabase (mesmo padrao de `useChatHistory.test.ts`). Nao e possivel criar "usuarios temporarios" reais no sandbox de build — mas podemos simular todos os fluxos com mocks precisos que replicam o comportamento do Supabase Realtime.
+```text
+Canal                              Tipo           Custo WAL
+─────────────────────────────────────────────────────────────
+widget-messages-{roomId}           pg_changes     Alto (INSERT+UPDATE)
+widget-room-{roomId}               pg_changes     Alto (UPDATE)
+widget-visitor-{visitorId}         pg_changes     Alto (INSERT+UPDATE)
+typing-{roomId}                    broadcast      Zero
+```
 
-Os testes serao organizados por fix e cobrirao os cenarios criticos de regressao.
+4 canais por visitante. 3 geram WAL polling. Com 100 visitantes = 300 conexoes WAL.
 
-## Arquivos de Teste
+## Plano
 
-### 1. `src/hooks/__tests__/useAttendantQueues.test.ts`
-Valida Fix 1.1 (inline updates + safety net 120s):
-- **Inline update de attendant**: Simula callback `onAttendantUpdate` com payload `{ attendant_id, status, active_conversations }` e verifica que `setAttendants` atualiza apenas o attendant correto sem chamar `fetchQueues`
-- **Inline update de unassigned rooms**: Simula `onRoomStatusChange` com payload de sala sem attendant — verifica que sala e adicionada a `unassignedRooms`. Simula com `attendant_id` preenchido — verifica que sala e removida
-- **Safety net 120s**: Verifica que `setInterval` e chamado com 120000ms (nao 10000)
-- **Nao tem polling 10s**: Verifica que nenhum interval de 10s existe
+### Fix 3.1 — Unificar 3 canais pg_changes em 1
 
-### 2. `src/hooks/__tests__/useChatMessages.test.ts`
-Valida Fix 1.2 (sem UPDATE listener):
-- **INSERT listener ativo**: Simula `.on("postgres_changes", { event: "INSERT" })` e verifica que mensagens novas sao adicionadas ao state
-- **Sem UPDATE listener**: Verifica que o canal NAO registra listener para evento UPDATE
-- **Canal com sufixo aleatorio**: Verifica que nome do canal inclui sufixo
+**Arquivo**: `src/pages/ChatWidget.tsx`
 
-### 3. `src/contexts/__tests__/TenantRealtimeContext.test.ts`
-Valida Fix 1.3 (UPDATE only) + Fix 2.2 (visitor_last_read_at no payload):
-- **attendant_profiles escuta UPDATE only**: Verifica que o canal `tenant-attendants-pg` registra `event: "UPDATE"` (nao `"*"`)
-- **RoomStatusPayload inclui visitor_last_read_at**: Verifica que o safety net mapeia `visitor_last_read_at` do payload do banco
-- **Dedup funciona**: Simula dois eventos com mesmo `updated_at` — verifica que so o primeiro e processado
+Substituir os 3 useEffects (linhas 441-666) por 1 unico useEffect com canal consolidado `widget-realtime-{visitorId}-{suffix}`:
 
-### 4. `src/components/chat/__tests__/VisitorInfoPanel.perf.test.ts`
-Valida Fix 2.1 (sem pg_changes):
-- **Sem canal postgres_changes**: Verifica que o componente NAO cria canal `visitor-panel-*`
-- **fetchData executa ao trocar de sala**: Verifica que `fetchData` e chamado quando `visitorId` muda
+```text
+Canal unico: widget-realtime-{visitorId}-{suffix}
+  ├─ pg_changes INSERT chat_messages  (filter: room_id=eq.{roomId})
+  ├─ pg_changes UPDATE chat_messages  (filter: room_id=eq.{roomId})
+  ├─ pg_changes UPDATE chat_rooms     (filter: id=eq.{roomId})
+  ├─ pg_changes INSERT chat_rooms     (filter: visitor_id=eq.{visitorId})
+  └─ pg_changes UPDATE chat_rooms     (filter: visitor_id=eq.{visitorId})
+```
 
-### 5. `src/pages/__tests__/WorkspaceDebounce.test.ts`
-Valida Fix 2.2 + 2.3 (visitor_last_read_at via safety net + debounces):
-- **Sem canal workspace-room-read**: Verifica que AdminWorkspace NAO cria canal `workspace-room-read-*`
-- **visitor_last_read_at via onRoomStatusChange**: Simula payload com `visitor_last_read_at` e verifica que state atualiza
-- **Debounce 10s no pendingRefreshTrigger**: Simula 5 eventos rapidos de `onRoomStatusChange` — verifica que `setPendingRefreshTrigger` incrementa apenas 1 vez apos 10s
+- Quando `roomId` ou `visitorId` mudam, canal e destruido e recriado (mesmo padrao atual)
+- Toda a logica interna dos handlers permanece identica
+- Se `roomId` for null, apenas os listeners de `chat_rooms` por `visitorId` sao registrados
 
-### 6. `src/components/chat/__tests__/PendingRoomsList.debounce.test.ts`
-Valida Fix 2.3 (debounce 5s):
-- **Debounce 5s no refreshTrigger**: Muda `refreshTrigger` 3 vezes em 1s — verifica que `fetchPendingRooms` executa apenas 1 vez apos 5s
-- **Primeiro load sem debounce**: Verifica que `refreshTrigger === 0` executa imediatamente (sem delay)
+### Fix 3.2 — Manter canal de typing separado
 
-## Detalhes Tecnicos
+O canal `typing-{roomId}` (linhas 496-513) permanece **inalterado**:
+- Broadcast puro, zero custo WAL
+- Ciclo de vida diferente (so existe com roomId ativo)
+- Nenhuma mudanca necessaria
 
-- Mock do `supabase` com chainable queries (padrao existente)
-- Mock do `useTenantRealtime` retornando callbacks controlaveis
-- `vi.useFakeTimers()` para testar debounces e intervals
-- Nao precisa de usuarios reais no banco — os mocks simulam os payloads exatos que o Supabase enviaria
-- Total: ~6 arquivos de teste, ~20 cenarios
+## Resultado
 
-## Arquivos criados/modificados
+```text
+                              ANTES    DEPOIS
+─────────────────────────────────────────────
+Canais pg_changes / visitante    3        1
+Canais broadcast / visitante     1        1
+Total canais / visitante         4        2
+───────────────────────────────────────────
+100 visitantes simultaneos:
+  Canais pg_changes            300      100
+  Canais broadcast             100      100
+  Total                        400      200
+```
 
-| Arquivo | Tipo |
-|---------|------|
-| `src/hooks/__tests__/useAttendantQueues.test.ts` | Novo |
-| `src/hooks/__tests__/useChatMessages.test.ts` | Novo |
-| `src/contexts/__tests__/TenantRealtimeContext.test.ts` | Novo |
-| `src/components/chat/__tests__/VisitorInfoPanel.perf.test.ts` | Novo |
-| `src/pages/__tests__/WorkspaceDebounce.test.ts` | Novo |
-| `src/components/chat/__tests__/PendingRoomsList.debounce.test.ts` | Novo |
+Economia: **~200 conexoes WAL** por 100 visitantes. ~6.000 req/hora a menos.
 
-Nenhum arquivo de producao sera modificado.
+## Riscos
+
+| Risco | Prob. | Mitigacao |
+|-------|-------|-----------|
+| Canal consolidado falha ao recriar quando roomId muda | Baixa | Cleanup no return do useEffect, padrao existente |
+| Multiplos .on() perdem eventos | Nenhuma | Supabase suporta nativamente |
+| Typing para de funcionar | Nenhuma | Canal mantido separado, sem alteracao |
+
+## Arquivo Modificado
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/pages/ChatWidget.tsx` | Consolidar 3 useEffects de pg_changes (linhas 441-666) em 1 unico useEffect com canal unificado |
+
+Nenhuma mudanca de banco, edge function ou schema. Typing mantido.
 
