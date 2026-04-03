@@ -46,6 +46,11 @@ vi.mock("@/contexts/TenantRealtimeContext", () => ({
 import { useAttendantQueues } from "../useChatRealtime";
 
 describe("useAttendantQueues (Fix 1.1)", () => {
+  beforeEach(() => {
+    // Suppress unhandled rejections from fetchQueues initial call
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
