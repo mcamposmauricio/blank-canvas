@@ -45,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isMaster, setIsMaster] = useState(false);
   const [isChatEnabled, setIsChatEnabled] = useState(false);
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
+  const [disabledModules, setDisabledModules] = useState<Set<string>>(new Set());
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [userDataLoading, setUserDataLoading] = useState(false);
