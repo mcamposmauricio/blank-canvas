@@ -52,7 +52,7 @@ describe("PendingRoomsList debounce (Fix 2.3)", () => {
     // Simulate 5 rapid refreshTrigger changes (each clears previous timer)
     for (let i = 1; i <= 5; i++) {
       if (currentTimer) clearTimeout(currentTimer);
-      const delay = i === 0 ? 0 : 5000;
+      const delay = 5000;
       currentTimer = setTimeout(fetchPendingRooms, delay);
     }
 
