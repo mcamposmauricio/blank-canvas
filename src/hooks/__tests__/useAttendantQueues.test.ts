@@ -1,27 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
-// Proxy-based chainable mock
-function createChainProxy(resolveData: any = { data: [], count: 0 }): any {
-  const handler: ProxyHandler<any> = {
-    get(_target, prop) {
-      if (prop === "then") return (resolve: any, _reject?: any) => Promise.resolve(resolveData).then(resolve);
-      if (prop === "catch") return (_fn: any) => createChainProxy(resolveData);
-      if (prop === "finally") return (fn: any) => { fn(); return createChainProxy(resolveData); };
-      return (..._args: any[]) => createChainProxy(resolveData);
-    },
-  };
-  return new Proxy({}, handler);
-}
-
 vi.mock("@/integrations/supabase/client", () => {
-  const mockFrom = vi.fn().mockImplementation(() => createChainProxy());
+  function cp(rd: any = { data: [], count: 0 }): any {
+    return new Proxy({}, {
+      get(_t, p) {
+        if (p === "then") return (res: any, _rej?: any) => Promise.resolve(rd).then(res);
+        if (p === "catch") return (_fn: any) => cp(rd);
+        if (p === "finally") return (fn: any) => { fn(); return cp(rd); };
+        return (..._a: any[]) => cp(rd);
+      },
+    });
+  }
   return {
     supabase: {
-      from: mockFrom,
+      from: vi.fn().mockImplementation(() => cp()),
       channel: vi.fn().mockReturnValue({ on: vi.fn().mockReturnThis(), subscribe: vi.fn() }),
       removeChannel: vi.fn(),
-      rpc: vi.fn().mockImplementation(() => createChainProxy()),
+      rpc: vi.fn().mockImplementation(() => cp()),
     },
   };
 });
