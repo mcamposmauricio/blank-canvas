@@ -1,64 +1,91 @@
 
 
-# Plano: Reverter Labels CSAT + Forcar Tenant Modules sobre Permissoes
+# Plano: Redesign Visual do Widget — Todas as Telas + Preview
 
-## Duas tarefas
+## Resumo
 
-### 1. Reverter textos/labels do CSAT
+Modernizar o visual de todas as telas de status do widget (fora do horario, ocupados, aguardando, closed) e do preview nas configuracoes. CSAT mantem labels/textos intactos, recebe apenas melhorias visuais (emoji maior, glow nas estrelas). Preview espelha fielmente o novo design.
 
-O CSAT no `ChatWidget.tsx` e no `WidgetPreview.tsx` nao teve labels alterados nas ultimas mudancas -- os textos atuais sao os originais ("Avalie o atendimento", "Comentario (opcional)", "Enviar Avaliacao", etc.). Nao ha alteracao de texto a reverter neste momento. Confirmo que os labels serao mantidos exatamente como estao, sem nenhuma modificacao de texto no CSAT em ambas as implementacoes.
+## Mudancas por Arquivo
 
-Se houve uma alteracao anterior que nao esta refletida no codigo atual, por favor indique qual texto precisa ser revertido.
+### 1. `src/pages/ChatWidget.tsx`
 
-### 2. Tenant Modules deve sobrepor permissoes de usuario
+**Tela Outside Hours (linha ~1514-1522)**
+- Substituir `bg-blue-50 border-blue-200 text-blue-800` por card usando `primaryColor` com opacidade
+- Adicionar icone decorativo `Clock` com circulos concentricos animados (pulse suave)
+- Titulo com `font-semibold` e subtitulo com spacing melhorado
 
-**Problema**: O modulo CS (Customer Success) aparece na sidebar da Marq HR mesmo apos ter sido desabilitado via backoffice master (tabela `tenant_modules`). Isso ocorre porque o `AppSidebar.tsx` verifica apenas `hasPermission("cs", "view")` mas **nunca consulta `tenant_modules`** para verificar se o modulo esta ativo para o tenant.
+**Tela All Busy (linha ~1523-1531)**
+- Substituir `bg-amber-50 border-amber-200 text-amber-800` por card usando `primaryColor` com opacidade (mesmo padrao do outside hours)
+- Adicionar icone `Users` com circulos decorativos animados
+- Mesmo padrao visual do outside hours para consistencia
 
-O mesmo problema potencialmente afeta os modulos: `chat`, `nps`, `help`, `contacts`.
+**Tela Waiting normal (linha ~1497-1541)**
+- Substituir `MessageSquare` + ripple por 3 circulos concentricos animados com `primaryColor` (pulse moderno com delays escalonados)
+- Barra de progresso com gradiente usando `primaryColor`
+- Texto de "Aguardando" com animacao de ellipsis CSS
 
-**Solucao**: Carregar os modulos habilitados do tenant no `AuthContext` e expor uma funcao `isModuleEnabled(module)`. O `AppSidebar` e o `PermissionGuard` usarao essa verificacao antes de qualquer checagem de permissao de usuario.
+**Tela Closed (linha ~1788-1798)**
+- Circulo de sucesso maior (h-16 w-16) com gradiente suave
+- Animacao de confetti CSS sutil (4 particulas com keyframes)
+- Tipografia melhorada no texto de agradecimento
 
-#### Mudancas por arquivo
+**Tela CSAT (linha ~1712-1749)**
+- SEM alteracao de textos/labels ("Avalie o atendimento", "Comentario (opcional)", "Enviar Avaliacao" mantidos)
+- Estrelas maiores (h-9 w-9) com hover glow sutil usando box-shadow
+- Emoji reativo maior com animacao de escala mais expressiva
 
-**`src/contexts/AuthContext.tsx`**
-- Adicionar state `disabledModules: Set<string>` 
-- No `loadUserData`, apos obter o `tenantId`, buscar `tenant_modules` onde `is_enabled = false`
-- Expor funcao `isModuleEnabled(module: string): boolean` no contexto
-  - Retorna `true` se nao houver registro (permissivo por padrao)
-  - Retorna `false` se modulo estiver explicitamente desabilitado
-- Para master nao-impersonando, retorna sempre `true`
+**Tela CSAT Thank You (linha ~1752-1772)**
+- Circulo maior com gradiente, confetti sutil
+- Melhor espacamento e tipografia
 
-**`src/components/AppSidebar.tsx`**
-- Importar `isModuleEnabled` do `useAuth`
-- Adicionar verificacao de modulo em cada secao:
-  - Chat: `showChat && isModuleEnabled('chat')`
-  - NPS: `showNPS && isModuleEnabled('nps')`
-  - CS: `isModuleEnabled('cs') && (hasPermission(...))`
-  - Help: `showHelp && isModuleEnabled('help')`
-  - Contacts: `showContacts && isModuleEnabled('contacts')`
+### 2. `src/components/chat/WidgetPreview.tsx`
 
-**`src/components/PermissionGuard.tsx`**
-- Importar `isModuleEnabled` do `useAuth`
-- Antes da checagem de permissao, extrair o modulo raiz (ex: `cs.dashboard` -> `cs`)
-- Se `!isModuleEnabled(rootModule)`, retornar `AccessDenied`
-- Isso garante que mesmo acessando a URL diretamente, o modulo bloqueado nao sera renderizado
+Espelhar o novo design em cada tab do preview:
 
-#### Logica de `isModuleEnabled`
+**Tab outside_hours (linha ~270-287)**
+- Adicionar circulos decorativos animados ao redor do icone Clock
+- Card com borda usando `primaryColor` com opacidade em vez de cor neutra
 
-```text
-isModuleEnabled("cs"):
-  1. Se master e nao impersonando → true
-  2. Se disabledModules contem "cs" → false
-  3. Caso contrario → true (permissivo por padrao)
-```
+**Tab all_busy (linha ~290-306)**
+- Mesmo padrao do outside_hours para consistencia
 
-## Arquivos modificados
+**Tab waiting (linha ~310-315)**
+- Substituir `Loader2 animate-spin` por 3 circulos concentricos animados (versao miniatura do widget real)
+- Adicionar barra de progresso miniatura
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/contexts/AuthContext.tsx` | Carregar `tenant_modules` desabilitados, expor `isModuleEnabled` |
-| `src/components/AppSidebar.tsx` | Adicionar `isModuleEnabled` como filtro antes de `hasPermission` |
-| `src/components/PermissionGuard.tsx` | Bloquear acesso a modulos desabilitados no tenant |
+**Tab csat (linha ~373-402)**
+- Estrelas maiores com hover glow
+- Adicionar emoji reativo acima das estrelas
+- Manter textos: "Avalie o atendimento", "Comentario (opcional)", "Pular", "Enviar"
 
-Nenhuma mudanca de banco, edge function ou schema.
+**Tab closed (linha ~406-419)**
+- Circulo maior com gradiente
+- Confetti CSS miniatura
+- Melhor tipografia
+
+**Tab chat (linha ~318-369)**
+- Ajustar typing indicator para usar `animate-wave-dot` (consistente com widget real)
+
+### 3. `src/index.css`
+
+Adicionar keyframes:
+- `confetti-fall`: 4 particulas com rotacao e queda (CSS puro, sem lib)
+- `ellipsis`: animacao de "..." para texto de waiting
+- `pulse-ring`: circulos concentricos que expandem e desaparecem
+
+## Regras
+
+- Nenhum texto/label do CSAT sera alterado
+- Nenhuma mudanca de logica, estado ou fluxo
+- Apenas visual/CSS
+- `primaryColor` usado em vez de cores hardcoded (blue/amber)
+
+## Arquivos Modificados
+
+| Arquivo | Tipo de Alteracao |
+|---------|-------------------|
+| `src/pages/ChatWidget.tsx` | Redesign visual: waiting, outside_hours, all_busy, csat (visual only), closed |
+| `src/components/chat/WidgetPreview.tsx` | Espelhar novo design em todas as tabs |
+| `src/index.css` | Adicionar keyframes: confetti-fall, ellipsis, pulse-ring |
 
