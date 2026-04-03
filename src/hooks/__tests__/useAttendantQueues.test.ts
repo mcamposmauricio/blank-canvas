@@ -94,7 +94,6 @@ describe("useAttendantQueues (Fix 1.1)", () => {
     // Should NOT call fetchQueues
     expect(attSection).not.toMatch(/fetchQueues/);
   });
-  });
 
   it("removes room from unassigned when attendant_id is assigned", () => {
     const { result, unmount } = renderHook(() => useAttendantQueues("tenant-1"));
