@@ -1760,16 +1760,21 @@ const ChatWidget = () => {
 
       {/* CSAT Thank You Screen */}
       {phase === "csat" && (widgetConfig?.show_csat ?? true) && csatSubmitted && (
-        <div className="p-6 flex flex-col items-center justify-center text-center border-t animate-fade-in gap-3">
-          <div className="h-14 w-14 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}15` }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="p-6 flex flex-col items-center justify-center text-center border-t animate-fade-in gap-4 relative overflow-hidden">
+          {/* Confetti particles */}
+          <span className="absolute top-2 left-[20%] w-2 h-2 rounded-full animate-confetti" style={{ backgroundColor: primaryColor, animationDelay: '0s' }} />
+          <span className="absolute top-2 left-[50%] w-1.5 h-1.5 rounded-sm animate-confetti" style={{ backgroundColor: `${primaryColor}80`, animationDelay: '0.2s' }} />
+          <span className="absolute top-2 left-[75%] w-2 h-2 rounded-full animate-confetti" style={{ backgroundColor: `${primaryColor}60`, animationDelay: '0.4s' }} />
+          <span className="absolute top-2 left-[35%] w-1.5 h-1.5 rounded-sm animate-confetti" style={{ backgroundColor: `${primaryColor}90`, animationDelay: '0.6s' }} />
+          <div className="h-16 w-16 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${primaryColor}20, ${primaryColor}08)` }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 13l4 4L19 7" strokeDasharray="24" className="animate-check-draw" />
             </svg>
           </div>
-          <p className="text-sm font-medium">Obrigado pelo seu feedback!</p>
+          <p className="text-sm font-semibold">Obrigado pelo seu feedback!</p>
           <p className="text-xs text-muted-foreground">Sua avaliação nos ajuda a melhorar nosso atendimento.</p>
           <button
-            className="mt-2 w-full h-10 rounded-xl text-sm font-medium text-white transition-all hover:opacity-90 active:scale-[0.98]"
+            className="mt-1 w-full h-10 rounded-xl text-sm font-medium text-white transition-all hover:opacity-90 active:scale-[0.98]"
             onClick={() => {
               setCsatSubmitted(false);
               handleBackToHistory();
@@ -1796,14 +1801,18 @@ const ChatWidget = () => {
 
       {/* ===== CLOSED PHASE ===== */}
       {phase === "closed" && (
-        <div className="p-6 flex flex-col items-center justify-center text-center border-t animate-fade-in gap-3">
-          {/* Animated check */}
-          <div className="h-14 w-14 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}15` }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="p-6 flex flex-col items-center justify-center text-center border-t animate-fade-in gap-4 relative overflow-hidden">
+          {/* Confetti particles */}
+          <span className="absolute top-2 left-[25%] w-2 h-2 rounded-full animate-confetti" style={{ backgroundColor: primaryColor, animationDelay: '0.1s' }} />
+          <span className="absolute top-2 left-[60%] w-1.5 h-1.5 rounded-sm animate-confetti" style={{ backgroundColor: `${primaryColor}70`, animationDelay: '0.3s' }} />
+          <span className="absolute top-2 left-[40%] w-2 h-2 rounded-full animate-confetti" style={{ backgroundColor: `${primaryColor}50`, animationDelay: '0.5s' }} />
+          <div className="h-16 w-16 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${primaryColor}20, ${primaryColor}08)` }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 13l4 4L19 7" strokeDasharray="24" className="animate-check-draw" />
             </svg>
           </div>
-          <p className="text-sm text-muted-foreground">Obrigado pelo feedback!<br/>Esta conversa foi encerrada.</p>
+          <p className="text-sm font-semibold">Obrigado pelo feedback!</p>
+          <p className="text-xs text-muted-foreground">Esta conversa foi encerrada.</p>
         </div>
       )}
 
