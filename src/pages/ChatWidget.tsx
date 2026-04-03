@@ -1727,14 +1727,15 @@ const ChatWidget = () => {
               <button
                 key={v}
                 onClick={() => setCsatScore(v)}
-                className="focus:outline-none transition-transform duration-150 hover:scale-110 active:scale-125"
+                className="focus:outline-none transition-all duration-200 hover:scale-125 active:scale-95"
+                style={{ filter: v <= csatScore ? `drop-shadow(0 0 6px ${primaryColor}60)` : 'none' }}
               >
-                <Star className={`h-8 w-8 transition-colors ${v <= csatScore ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground/40"}`} />
+                <Star className={`h-9 w-9 transition-colors ${v <= csatScore ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground/30"}`} />
               </button>
             ))}
           </div>
           {csatScore > 0 && (
-            <p className="text-2xl text-center animate-scale-in">{csatEmoji(csatScore)}</p>
+            <p className="text-3xl text-center animate-scale-in" style={{ filter: `drop-shadow(0 2px 8px ${primaryColor}30)` }}>{csatEmoji(csatScore)}</p>
           )}
           <Textarea
             placeholder="Comentário (opcional)"
