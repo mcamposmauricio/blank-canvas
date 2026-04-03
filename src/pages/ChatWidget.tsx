@@ -438,135 +438,95 @@ const ChatWidget = () => {
     setLoadingMore(false);
   };
 
-  useEffect(() => {
-    if (!roomId) return;
-
-    fetchMessages(roomId);
-
-    const channel = supabase
-      .channel(`widget-messages-${roomId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` }, (payload) => {
-        const msg = payload.new as any;
-        if (!msg.is_internal && !msg.deleted_at) {
-          // Play notification sound for attendant messages
-          if (msg.sender_type === "attendant") {
-            try {
-              const audio = new Audio(
-                "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
-              );
-              audio.volume = 0.25;
-              audio.play().catch(() => {});
-            } catch {}
-            // Track unread when widget is minimized
-            if (!isOpenRef.current) {
-              setUnreadCount(prev => {
-                const next = prev + 1;
-                if (isEmbed) {
-                  window.parent.postMessage({ type: "chat-unread-count", count: next }, "*");
-                }
-                return next;
-              });
-            }
-          }
-          setMessages((prev) => {
-            // Remove any optimistic version of this message to prevent duplicates
-            const withoutOptimistic = prev.filter((m) => !m.id.startsWith("optimistic-"));
-            // Also check if the real message already exists
-            if (withoutOptimistic.some((m) => m.id === msg.id)) return withoutOptimistic;
-            return [...withoutOptimistic, msg];
-          });
-          // Update visitor_last_read_at only when widget is open AND message is from attendant/system
-          if (isOpenRef.current && (msg.sender_type === "attendant" || msg.sender_type === "system")) {
-            supabase.from("chat_rooms").update({ visitor_last_read_at: new Date().toISOString() }).eq("id", roomId!).then(() => {});
-          }
-        }
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` }, (payload) => {
-        const msg = payload.new as any;
-        if (msg.deleted_at) {
-          setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-        }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [roomId, fetchMessages]);
-
-  // Typing indicator broadcast
-  useEffect(() => {
-    if (!roomId) { setTypingUser(null); return; }
-    setTypingUser(null);
-
-    const channel = supabase
-      .channel(`typing-${roomId}`)
-      .on("broadcast", { event: "typing" }, (payload) => {
-        const name = payload.payload?.name;
-        if (name) {
-          setTypingUser(name);
-          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-          typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
-        }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [roomId]);
-
-  useEffect(() => {
-    if (!roomId) return;
-
-    const channel = supabase
-      .channel(`widget-room-${roomId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_rooms", filter: `id=eq.${roomId}` }, async (payload) => {
-        const room = payload.new as any;
-        if (room.status === "active" && phase === "waiting") {
-          setAllBusy(false);
-          setPhase("chat");
-          postMsg("chat-connected");
-          // Fetch attendant name
-          if (room.attendant_id) {
-            const { data: att } = await supabase
-              .from("attendant_profiles")
-              .select("display_name")
-              .eq("id", room.attendant_id)
-              .maybeSingle();
-            setAttendantName(att?.display_name ?? null);
-          }
-        } else if (room.status === "closed") {
-          const resStatus = room.resolution_status;
-          if (resStatus === "resolved") {
-            setPhase("csat");
-            setAttendantName(null);
-          } else if (resStatus === "archived") {
-            // Only navigate away for archived
-            if (isResolvedVisitor) {
-              handleBackToHistory();
-            } else {
-              setPhase("closed");
-            }
-            setAttendantName(null);
-          } else if (resStatus === "pending") {
-            // Show reopen buttons by switching to viewTranscript phase
-            setViewTranscriptResolutionStatus("pending");
-            setPhase("viewTranscript");
-            fetchMessages(room.id);
-            setAttendantName(null);
-          }
-        }
-        // visitor_last_read_at is now only updated on widget open and new message arrival
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [roomId, phase]);
-
-  // Realtime subscription for proactive chats (new rooms created by attendants) and reopened rooms
-  // Merged into single channel to reduce pg_changes overhead
+  // === Consolidated Realtime Channel (Phase 3 - Fix 3.1) ===
+  // Unifies 3 separate pg_changes channels into 1, reducing WAL polling connections per visitor from 3 to 1.
   useEffect(() => {
     if (!visitorId) return;
 
-    const visitorChannel = supabase
-      .channel(`widget-visitor-${visitorId}`)
+    if (roomId) fetchMessages(roomId);
+
+    const suffix = Math.random().toString(36).slice(2, 8);
+    let channelBuilder = supabase.channel(`widget-realtime-${visitorId}-${suffix}`);
+
+    // --- chat_messages listeners (only when roomId exists) ---
+    if (roomId) {
+      channelBuilder = channelBuilder
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` }, (payload) => {
+          const msg = payload.new as any;
+          if (!msg.is_internal && !msg.deleted_at) {
+            if (msg.sender_type === "attendant") {
+              try {
+                const audio = new Audio(
+                  "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGjlqj8Lb1LRiQhY0YYa95+3UdFQmLFl7p+Xj2p6MiWpXdZqXh3FxOBImWVhzl5KCcHM1EjhWX3eVkYBxcjURO1hdepCSfm5pJytRVnqNjoFyey8lRE55lYd5ciwnNk55ioJ3ay0vQU94jXlwYSAyREhqfG9eLjAqI0E="
+                );
+                audio.volume = 0.25;
+                audio.play().catch(() => {});
+              } catch {}
+              if (!isOpenRef.current) {
+                setUnreadCount(prev => {
+                  const next = prev + 1;
+                  if (isEmbed) {
+                    window.parent.postMessage({ type: "chat-unread-count", count: next }, "*");
+                  }
+                  return next;
+                });
+              }
+            }
+            setMessages((prev) => {
+              const withoutOptimistic = prev.filter((m) => !m.id.startsWith("optimistic-"));
+              if (withoutOptimistic.some((m) => m.id === msg.id)) return withoutOptimistic;
+              return [...withoutOptimistic, msg];
+            });
+            if (isOpenRef.current && (msg.sender_type === "attendant" || msg.sender_type === "system")) {
+              supabase.from("chat_rooms").update({ visitor_last_read_at: new Date().toISOString() }).eq("id", roomId!).then(() => {});
+            }
+          }
+        })
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` }, (payload) => {
+          const msg = payload.new as any;
+          if (msg.deleted_at) {
+            setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+          }
+        })
+        // --- chat_rooms UPDATE by roomId ---
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_rooms", filter: `id=eq.${roomId}` }, async (payload) => {
+          const room = payload.new as any;
+          if (room.status === "active" && phase === "waiting") {
+            setAllBusy(false);
+            setPhase("chat");
+            postMsg("chat-connected");
+            if (room.attendant_id) {
+              const { data: att } = await supabase
+                .from("attendant_profiles")
+                .select("display_name")
+                .eq("id", room.attendant_id)
+                .maybeSingle();
+              setAttendantName(att?.display_name ?? null);
+            }
+          } else if (room.status === "closed") {
+            const resStatus = room.resolution_status;
+            if (resStatus === "resolved") {
+              setPhase("csat");
+              setAttendantName(null);
+            } else if (resStatus === "archived") {
+              if (isResolvedVisitor) {
+                handleBackToHistory();
+              } else {
+                setPhase("closed");
+              }
+              setAttendantName(null);
+            } else if (resStatus === "pending") {
+              setViewTranscriptResolutionStatus("pending");
+              setPhase("viewTranscript");
+              fetchMessages(room.id);
+              setAttendantName(null);
+            }
+          }
+        });
+    }
+
+    // --- chat_rooms INSERT+UPDATE by visitorId (proactive chats & reopens) ---
+    channelBuilder = channelBuilder
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
@@ -574,7 +534,6 @@ const ChatWidget = () => {
         filter: `visitor_id=eq.${visitorId}`,
       }, async (payload) => {
         const newRoom = payload.new as any;
-        // If not currently in an active conversation, auto-enter the new proactive chat
         if (phase !== "chat" && phase !== "waiting" && phase !== "csat") {
           setRoomId(newRoom.id);
           setMessages([]);
@@ -595,7 +554,6 @@ const ChatWidget = () => {
           }
           postMsg("chat-ready");
         }
-        // Notify unread for broadcast/proactive rooms when widget is closed or user is in another room
         if (!isOpenRef.current || (roomId && roomId !== newRoom.id)) {
           setUnreadCount(prev => {
             const next = prev + 1;
@@ -608,7 +566,6 @@ const ChatWidget = () => {
             audio.play().catch(() => {});
           } catch {}
         }
-        // If viewing history, refresh the list
         if (phase === "history") {
           fetchHistory(visitorId);
         }
@@ -621,11 +578,9 @@ const ChatWidget = () => {
       }, async (payload) => {
         const updatedRoom = payload.new as any;
         const oldRoom = payload.old as any;
-        // Detect reopen: was closed, now active or waiting
         if (oldRoom.status === "closed" && (updatedRoom.status === "active" || updatedRoom.status === "waiting")) {
-          // If not in an active chat, auto-enter
           if (phase !== "chat" && phase !== "waiting" && phase !== "csat") {
-          setRoomId(updatedRoom.id);
+            setRoomId(updatedRoom.id);
             setCsatScore(0);
             setCsatComment("");
             if (updatedRoom.status === "active") {
@@ -638,10 +593,8 @@ const ChatWidget = () => {
               setPhase("waiting");
             }
             postMsg("chat-ready");
-            // Load full history instead of clearing
             fetchMessages(updatedRoom.id);
           }
-          // Notify unread
           if (!isOpenRef.current || (roomId && roomId !== updatedRoom.id)) {
             setUnreadCount(prev => {
               const next = prev + 1;
@@ -654,16 +607,34 @@ const ChatWidget = () => {
               audio.play().catch(() => {});
             } catch {}
           }
-          // If viewing history, refresh
           if (phase === "history") fetchHistory(visitorId);
+        }
+      });
+
+    channelBuilder.subscribe();
+
+    return () => { supabase.removeChannel(channelBuilder); };
+  }, [visitorId, roomId, phase, fetchMessages, fetchHistory]);
+
+  // Typing indicator broadcast (kept separate — pure broadcast, zero WAL cost)
+  useEffect(() => {
+    if (!roomId) { setTypingUser(null); return; }
+    setTypingUser(null);
+
+    const channel = supabase
+      .channel(`typing-${roomId}`)
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const name = payload.payload?.name;
+        if (name) {
+          setTypingUser(name);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
         }
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(visitorChannel);
-    };
-  }, [visitorId, phase, fetchHistory, roomId]);
+    return () => { supabase.removeChannel(channel); };
+  }, [roomId]);
 
   // Trigger scroll when phase changes to chat/viewTranscript + update read status
   useEffect(() => {
