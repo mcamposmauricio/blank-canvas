@@ -2,12 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } 
 import { renderHook, act } from "@testing-library/react";
 
 // Proxy-based chainable mock
-function createChainProxy(): any {
+function createChainProxy(resolveData: any = { data: [], count: 0 }): any {
   const handler: ProxyHandler<any> = {
     get(_target, prop) {
-      if (prop === "then") return (resolve: any) => resolve({ data: [], count: 0 });
-      if (prop === "catch") return () => createChainProxy();
-      return () => createChainProxy();
+      if (prop === "then") return (resolve: any, _reject?: any) => Promise.resolve(resolveData).then(resolve);
+      if (prop === "catch") return (_fn: any) => createChainProxy(resolveData);
+      if (prop === "finally") return (fn: any) => { fn(); return createChainProxy(resolveData); };
+      return (..._args: any[]) => createChainProxy(resolveData);
     },
   };
   return new Proxy({}, handler);
