@@ -1,99 +1,64 @@
 
 
-# Plano: Bateria Completa de Testes — Widget + Atendente
+# Plano: Reverter Labels CSAT + Forcar Tenant Modules sobre Permissoes
 
-## Objetivo
+## Duas tarefas
 
-Criar testes abrangentes que validam todos os fluxos criticos do sistema de chat: Widget (visitante), AdminWorkspace (gestor), AttendantLite (atendente) e hooks compartilhados (`useChatMessages`, `useChatRooms`, `useAttendantQueues`). Cobrindo: contadores, troca de mensagens, transicoes de estado, typing, unread, som, notificacoes e debounce.
+### 1. Reverter textos/labels do CSAT
 
-## Cobertura Existente vs. Gaps
+O CSAT no `ChatWidget.tsx` e no `WidgetPreview.tsx` nao teve labels alterados nas ultimas mudancas -- os textos atuais sao os originais ("Avalie o atendimento", "Comentario (opcional)", "Enviar Avaliacao", etc.). Nao ha alteracao de texto a reverter neste momento. Confirmo que os labels serao mantidos exatamente como estao, sem nenhuma modificacao de texto no CSAT em ambas as implementacoes.
 
-Ja testado:
-- Widget: field classification, JSONB merge, auto-start, realtime handlers (INSERT/UPDATE/proactive/reopen/typing), channel structure
+Se houve uma alteracao anterior que nao esta refletida no codigo atual, por favor indique qual texto precisa ser revertido.
 
-Gaps identificados:
-- `useChatMessages`: INSERT dedup, clear on room switch, pagination (loadMore)
-- `useChatRooms`: room sorting, unread increment via broadcast, inline patch, sound/notification triggers, markRoomAsRead
-- `useAttendantQueues`: inline attendant update, unassigned room tracking, safety-net reconciliation
-- Workspace/Lite typing: channel lifecycle, timeout reset, filtering own user
-- ChatInput typing broadcast: throttle 2s, channel name correctness
-- Widget consolidated channel: dependency array rebuild (visitorId/roomId/phase changes)
+### 2. Tenant Modules deve sobrepor permissoes de usuario
 
-## Testes a Criar
+**Problema**: O modulo CS (Customer Success) aparece na sidebar da Marq HR mesmo apos ter sido desabilitado via backoffice master (tabela `tenant_modules`). Isso ocorre porque o `AppSidebar.tsx` verifica apenas `hasPermission("cs", "view")` mas **nunca consulta `tenant_modules`** para verificar se o modulo esta ativo para o tenant.
 
-### Arquivo 1: `src/hooks/__tests__/useChatMessagesLogic.test.ts`
+O mesmo problema potencialmente afeta os modulos: `chat`, `nps`, `help`, `contacts`.
 
-**Suite — Recepcao e paginacao de mensagens**
-- INSERT adiciona mensagem ao array em ordem cronologica
-- Mensagem duplicada (mesmo id) nao e adicionada
-- Ao trocar de room, mensagens sao limpas imediatamente (array vazio)
-- loadMore prepend mensagens anteriores mantendo ordem
-- hasMore = true quando response > PAGE_SIZE, false caso contrario
-- Canal usa sufixo aleatorio para evitar colisao entre instancias
+**Solucao**: Carregar os modulos habilitados do tenant no `AuthContext` e expor uma funcao `isModuleEnabled(module)`. O `AppSidebar` e o `PermissionGuard` usarao essa verificacao antes de qualquer checagem de permissao de usuario.
 
-### Arquivo 2: `src/hooks/__tests__/useChatRoomsLogic.test.ts`
+#### Mudancas por arquivo
 
-**Suite — Ordenacao e unread**
-- Rooms com unread_count > 0 aparecem primeiro
-- Entre rooms com mesmo status de unread, ordena por last_message_at desc
-- Room sem last_message_at usa created_at como fallback
-- markRoomAsRead zera unread_count da room no state local
+**`src/contexts/AuthContext.tsx`**
+- Adicionar state `disabledModules: Set<string>` 
+- No `loadUserData`, apos obter o `tenantId`, buscar `tenant_modules` onde `is_enabled = false`
+- Expor funcao `isModuleEnabled(module: string): boolean` no contexto
+  - Retorna `true` se nao houver registro (permissivo por padrao)
+  - Retorna `false` se modulo estiver explicitamente desabilitado
+- Para master nao-impersonando, retorna sempre `true`
 
-**Suite — Inline update via broadcast**
-- onRoomStatusChange com status "closed" remove room quando excludeClosed=true
-- onRoomStatusChange com status "_deleted" remove room
-- onRoomStatusChange com novo room_id dispara fetchSingleRoom
-- onRoomStatusChange com attendant_id atualiza inline sem refetch
+**`src/components/AppSidebar.tsx`**
+- Importar `isModuleEnabled` do `useAuth`
+- Adicionar verificacao de modulo em cada secao:
+  - Chat: `showChat && isModuleEnabled('chat')`
+  - NPS: `showNPS && isModuleEnabled('nps')`
+  - CS: `isModuleEnabled('cs') && (hasPermission(...))`
+  - Help: `showHelp && isModuleEnabled('help')`
+  - Contacts: `showContacts && isModuleEnabled('contacts')`
 
-**Suite — Mensagem activity**
-- onNewMessageActivity incrementa unread_count para mensagem de visitor em room nao selecionada
-- onNewMessageActivity NAO incrementa unread se room esta selecionada
-- onNewMessageActivity atualiza last_message e last_message_at
-- Som toca para mensagem de visitor em room nao selecionada quando soundEnabled=true
+**`src/components/PermissionGuard.tsx`**
+- Importar `isModuleEnabled` do `useAuth`
+- Antes da checagem de permissao, extrair o modulo raiz (ex: `cs.dashboard` -> `cs`)
+- Se `!isModuleEnabled(rootModule)`, retornar `AccessDenied`
+- Isso garante que mesmo acessando a URL diretamente, o modulo bloqueado nao sera renderizado
 
-### Arquivo 3: `src/hooks/__tests__/useAttendantQueuesLogic.test.ts`
+#### Logica de `isModuleEnabled`
 
-**Suite — Inline updates**
-- onAttendantUpdate atualiza status do atendente por id
-- onAttendantUpdate atualiza active_conversations inline
-- onAttendantUpdate nao altera atendentes com id diferente
-- onRoomStatusChange com closed remove de unassignedRooms
-- onRoomStatusChange com attendant_id remove de unassignedRooms
-- onRoomStatusChange sem attendant_id adiciona a unassignedRooms (dedup)
+```text
+isModuleEnabled("cs"):
+  1. Se master e nao impersonando → true
+  2. Se disabledModules contem "cs" → false
+  3. Caso contrario → true (permissivo por padrao)
+```
 
-### Arquivo 4: `src/components/chat/__tests__/TypingFlow.test.ts`
+## Arquivos modificados
 
-**Suite — Typing lifecycle completo (Workspace + Lite + Widget)**
-- Broadcast de typing seta typingUser com nome recebido
-- typingUser reseta para null apos 3000ms
-- Novo typing antes do timeout reinicia o timer
-- Typing do proprio usuario (mesmo user_id) e ignorado (Workspace/Lite)
-- Canal Workspace usa nome `typing-{roomId}`, Lite usa `typing-lite-{roomId}`
-- Widget typing canal e separado do canal consolidado
-- ChatInput throttle: broadcast so dispara se > 2s desde o ultimo
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/contexts/AuthContext.tsx` | Carregar `tenant_modules` desabilitados, expor `isModuleEnabled` |
+| `src/components/AppSidebar.tsx` | Adicionar `isModuleEnabled` como filtro antes de `hasPermission` |
+| `src/components/PermissionGuard.tsx` | Bloquear acesso a modulos desabilitados no tenant |
 
-### Arquivo 5: `src/pages/__tests__/WidgetChannelRebuild.test.ts`
-
-**Suite — Rebuild do canal consolidado**
-- Canal e destruido e recriado quando roomId muda
-- Canal e destruido e recriado quando visitorId muda
-- Canal e destruido e recriado quando phase muda
-- Sem visitorId, nenhum canal e criado
-- Sem roomId, canal tem apenas listeners de chat_rooms por visitorId
-
-## Abordagem Tecnica
-
-Todos os testes sao unitarios puros com Vitest. A logica e extraida como funcoes puras que recebem state e retornam novo state, seguindo o padrao ja estabelecido em `ChatWidgetRealtime.test.ts`. Sem mocks de Supabase, sem dependencia de rede.
-
-## Arquivos
-
-| Arquivo | Tipo |
-|---------|------|
-| `src/hooks/__tests__/useChatMessagesLogic.test.ts` | Novo |
-| `src/hooks/__tests__/useChatRoomsLogic.test.ts` | Novo |
-| `src/hooks/__tests__/useAttendantQueuesLogic.test.ts` | Novo |
-| `src/components/chat/__tests__/TypingFlow.test.ts` | Novo |
-| `src/pages/__tests__/WidgetChannelRebuild.test.ts` | Novo |
-
-Nenhum arquivo de producao sera modificado.
+Nenhuma mudanca de banco, edge function ou schema.
 
