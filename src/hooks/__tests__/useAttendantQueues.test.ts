@@ -45,9 +45,19 @@ vi.mock("@/contexts/TenantRealtimeContext", () => ({
 
 import { useAttendantQueues } from "../useChatRealtime";
 
+// Suppress unhandled rejections from fetchQueues mock chain
+const originalListeners = process.listeners("unhandledRejection");
+beforeAll(() => {
+  process.removeAllListeners("unhandledRejection");
+  process.on("unhandledRejection", () => {});
+});
+afterAll(() => {
+  process.removeAllListeners("unhandledRejection");
+  originalListeners.forEach((l) => process.on("unhandledRejection", l));
+});
+
 describe("useAttendantQueues (Fix 1.1)", () => {
   beforeEach(() => {
-    // Suppress unhandled rejections from fetchQueues initial call
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
