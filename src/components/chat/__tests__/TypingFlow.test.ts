@@ -114,7 +114,8 @@ describe("Typing — Channel naming", () => {
   it("typing channel only created when roomId is present", () => {
     const roomId: string | null = null;
     expect(!!roomId).toBe(false);
-    expect(!!"room-123").toBe(true);
+    const validRoom: string | null = "room-123";
+    expect(!!validRoom).toBe(true);
   });
 });
 
