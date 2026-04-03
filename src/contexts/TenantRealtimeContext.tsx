@@ -148,6 +148,7 @@ export function TenantRealtimeProvider({ children }: { children: ReactNode }) {
               priority: updated.priority as string | null,
               closed_at: updated.closed_at as string | null,
               assigned_at: updated.assigned_at as string | null,
+              visitor_last_read_at: updated.visitor_last_read_at as string | null,
             };
             roomStatusCallbacks.current.forEach(cb => cb(statusPayload, "pg"));
 
