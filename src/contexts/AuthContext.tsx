@@ -274,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isChatEnabled: isImpersonating ? true : isChatEnabled,
       loading, userDataLoading,
       tenantId: effectiveTenantId,
-      permissions, hasPermission,
+      permissions, hasPermission, isModuleEnabled,
       availableTenants, selectTenant, needsTenantSelection,
       isImpersonating, impersonatedTenantName,
       setImpersonation, clearImpersonation,
