@@ -196,6 +196,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Load disabled modules for this tenant
+    const resolvedTenantId = userTenantIds.length === 1
+      ? userTenantIds[0]
+      : (localStorage.getItem("selected-tenant-id") && userTenantIds.includes(localStorage.getItem("selected-tenant-id")!))
+        ? localStorage.getItem("selected-tenant-id")!
+        : userTenantIds[0];
+
+    if (resolvedTenantId) {
+      const { data: disabledMods } = await supabase
+        .from("tenant_modules")
+        .select("module_key")
+        .eq("tenant_id", resolvedTenantId)
+        .eq("is_enabled", false);
+      setDisabledModules(new Set((disabledMods || []).map(m => m.module_key)));
+    } else {
+      setDisabledModules(new Set());
+    }
+
     // Only update last_sign_in_at if profile already exists (no upsert — prevents orphan profile creation)
     if (profiles && profiles.length > 0) {
       await supabase.from("user_profiles")
