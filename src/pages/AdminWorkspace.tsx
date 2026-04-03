@@ -89,12 +89,17 @@ const AdminWorkspace = () => {
 
   // Polling moved to SidebarLayout for reliability (runs even without Workspace open)
 
-  // Increment pendingRefreshTrigger when rooms change (for PendingRoomsList)
+  // Debounced increment of pendingRefreshTrigger (10s) when rooms change
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const unsub = onRoomStatusChange(() => {
-      setPendingRefreshTrigger(prev => prev + 1);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => setPendingRefreshTrigger(prev => prev + 1), 10000);
     });
-    return unsub;
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsub();
+    };
   }, [onRoomStatusChange]);
 
   // Request browser notification permission
