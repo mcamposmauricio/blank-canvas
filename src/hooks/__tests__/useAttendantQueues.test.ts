@@ -76,11 +76,14 @@ describe("useAttendantQueues (Fix 1.1)", () => {
     unmount();
   });
 
-  it("inline updates attendant state without extra DB calls", () => {
-    const { supabase } = require("@/integrations/supabase/client");
+  it("inline updates attendant state without extra DB calls", async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
     const { unmount } = renderHook(() => useAttendantQueues("tenant-1"));
 
-    const callCountBefore = supabase.from.mock.calls.length;
+    // Wait a tick for initial fetchQueues to resolve
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+
+    const callCountBefore = (supabase.from as any).mock.calls.length;
 
     act(() => {
       capturedAttendantCb?.({
@@ -92,7 +95,7 @@ describe("useAttendantQueues (Fix 1.1)", () => {
     });
 
     // No new DB calls — inline update only
-    expect(supabase.from.mock.calls.length).toBe(callCountBefore);
+    expect((supabase.from as any).mock.calls.length).toBe(callCountBefore);
     unmount();
   });
 
