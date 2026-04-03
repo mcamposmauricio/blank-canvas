@@ -271,11 +271,15 @@ const WidgetPreview = ({
                 <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-2">
                   {showOutsideHoursBanner ? (
                     <>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}20` }}>
-                        <Clock className="h-4 w-4" style={{ color: primaryColor }} />
+                      <div className="relative flex items-center justify-center w-12 h-12">
+                        <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.3 }} />
+                        <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.2, animationDelay: '0.6s' }} />
+                        <Clock className="h-5 w-5 relative z-10" style={{ color: primaryColor }} />
                       </div>
-                      <p className="text-[10px] font-semibold leading-tight">{outsideHoursTitle}</p>
-                      <p className="text-[9px] text-muted-foreground leading-relaxed">{outsideHoursMessage}</p>
+                      <div className="rounded-xl px-3 py-2 space-y-1" style={{ backgroundColor: `${primaryColor}08`, border: `1px solid ${primaryColor}20` }}>
+                        <p className="text-[10px] font-semibold leading-tight" style={{ color: primaryColor }}>{outsideHoursTitle}</p>
+                        <p className="text-[9px] text-muted-foreground leading-relaxed">{outsideHoursMessage}</p>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -291,11 +295,15 @@ const WidgetPreview = ({
                 <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-2">
                   {showAllBusyBanner ? (
                     <>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}20` }}>
-                        <Users className="h-4 w-4" style={{ color: primaryColor }} />
+                      <div className="relative flex items-center justify-center w-12 h-12">
+                        <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.3 }} />
+                        <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.2, animationDelay: '0.6s' }} />
+                        <Users className="h-5 w-5 relative z-10" style={{ color: primaryColor }} />
                       </div>
-                      <p className="text-[10px] font-semibold leading-tight">{allBusyTitle}</p>
-                      <p className="text-[9px] text-muted-foreground leading-relaxed">{allBusyMessage}</p>
+                      <div className="rounded-xl px-3 py-2 space-y-1" style={{ backgroundColor: `${primaryColor}08`, border: `1px solid ${primaryColor}20` }}>
+                        <p className="text-[10px] font-semibold leading-tight" style={{ color: primaryColor }}>{allBusyTitle}</p>
+                        <p className="text-[9px] text-muted-foreground leading-relaxed">{allBusyMessage}</p>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -308,9 +316,23 @@ const WidgetPreview = ({
 
               {/* WAITING */}
               {previewTab === "waiting" && (
-                <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-2">
-                  <Loader2 className="h-5 w-5 animate-spin" style={{ color: primaryColor }} />
-                  <p className="text-[10px] text-muted-foreground">{waitingMessage}</p>
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-2 p-3">
+                  <div className="relative flex items-center justify-center w-10 h-10">
+                    <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.3 }} />
+                    <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.2, animationDelay: '0.6s' }} />
+                    <MessageSquare className="h-4 w-4 relative z-10" style={{ color: primaryColor }} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                    {waitingMessage}
+                    <span className="inline-flex gap-[1px] ml-0.5">
+                      <span className="w-[3px] h-[3px] rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor }} />
+                      <span className="w-[3px] h-[3px] rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor, animationDelay: '0.3s' }} />
+                      <span className="w-[3px] h-[3px] rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor, animationDelay: '0.6s' }} />
+                    </span>
+                  </p>
+                  <div className="w-full h-0.5 rounded-full overflow-hidden" style={{ backgroundColor: `${primaryColor}15` }}>
+                    <div className="h-full w-1/3 rounded-full animate-indeterminate" style={{ background: `linear-gradient(90deg, transparent, ${primaryColor}, transparent)` }} />
+                  </div>
                 </div>
               )}
 
