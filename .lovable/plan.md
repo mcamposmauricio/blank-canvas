@@ -1,85 +1,72 @@
 
 
-# Fase 1+2: Otimizacao de Performance — Implementacao
+# Plano: Bateria de Testes Automatizados para Validacao das Otimizacoes
 
-## Resumo
+## Objetivo
 
-7 fixes em 6 arquivos. Risco zero a baixo. Economia estimada: ~6.300 req/hora.
+Criar testes automatizados que validam que os 7 fixes da Fase 1+2 nao quebraram nenhum fluxo existente: contadores, troca de mensagens, atualizacoes em tempo real, debounces e inline updates.
 
----
+## Abordagem
 
-## Fix 1.1 — Eliminar polling 10s do `useAttendantQueues`
+Testes unitarios com Vitest + mocks do Supabase (mesmo padrao de `useChatHistory.test.ts`). Nao e possivel criar "usuarios temporarios" reais no sandbox de build — mas podemos simular todos os fluxos com mocks precisos que replicam o comportamento do Supabase Realtime.
 
-**Arquivo**: `src/hooks/useChatRealtime.ts` (linhas 488-503)
+Os testes serao organizados por fix e cobrirao os cenarios criticos de regressao.
 
-- Remover `setInterval(fetchQueues, 10000)`
-- No `onAttendantUpdate`: fazer **inline update** no state (`setAttendants` com map que atualiza so o attendant do payload) em vez de `fetchQueues()` (3 queries)
-- Adicionar `onRoomStatusChange` para atualizar `unassignedRooms` inline (add/remove quando `attendant_id` ou `status` muda)
-- Safety net: `setInterval(fetchQueues, 120000)` (2 min)
+## Arquivos de Teste
 
-## Fix 1.2 — Remover listener UPDATE de `chat_messages`
+### 1. `src/hooks/__tests__/useAttendantQueues.test.ts`
+Valida Fix 1.1 (inline updates + safety net 120s):
+- **Inline update de attendant**: Simula callback `onAttendantUpdate` com payload `{ attendant_id, status, active_conversations }` e verifica que `setAttendants` atualiza apenas o attendant correto sem chamar `fetchQueues`
+- **Inline update de unassigned rooms**: Simula `onRoomStatusChange` com payload de sala sem attendant — verifica que sala e adicionada a `unassignedRooms`. Simula com `attendant_id` preenchido — verifica que sala e removida
+- **Safety net 120s**: Verifica que `setInterval` e chamado com 120000ms (nao 10000)
+- **Nao tem polling 10s**: Verifica que nenhum interval de 10s existe
 
-**Arquivo**: `src/hooks/useChatRealtime.ts` (linhas 138-152)
+### 2. `src/hooks/__tests__/useChatMessages.test.ts`
+Valida Fix 1.2 (sem UPDATE listener):
+- **INSERT listener ativo**: Simula `.on("postgres_changes", { event: "INSERT" })` e verifica que mensagens novas sao adicionadas ao state
+- **Sem UPDATE listener**: Verifica que o canal NAO registra listener para evento UPDATE
+- **Canal com sufixo aleatorio**: Verifica que nome do canal inclui sufixo
 
-- Remover bloco `.on("postgres_changes", { event: "UPDATE", table: "chat_messages" })` inteiro
-- Manter apenas INSERT
+### 3. `src/contexts/__tests__/TenantRealtimeContext.test.ts`
+Valida Fix 1.3 (UPDATE only) + Fix 2.2 (visitor_last_read_at no payload):
+- **attendant_profiles escuta UPDATE only**: Verifica que o canal `tenant-attendants-pg` registra `event: "UPDATE"` (nao `"*"`)
+- **RoomStatusPayload inclui visitor_last_read_at**: Verifica que o safety net mapeia `visitor_last_read_at` do payload do banco
+- **Dedup funciona**: Simula dois eventos com mesmo `updated_at` — verifica que so o primeiro e processado
 
-## Fix 1.3 — `attendant_profiles` apenas UPDATE
+### 4. `src/components/chat/__tests__/VisitorInfoPanel.perf.test.ts`
+Valida Fix 2.1 (sem pg_changes):
+- **Sem canal postgres_changes**: Verifica que o componente NAO cria canal `visitor-panel-*`
+- **fetchData executa ao trocar de sala**: Verifica que `fetchData` e chamado quando `visitorId` muda
 
-**Arquivo**: `src/contexts/TenantRealtimeContext.tsx` (linha 208)
+### 5. `src/pages/__tests__/WorkspaceDebounce.test.ts`
+Valida Fix 2.2 + 2.3 (visitor_last_read_at via safety net + debounces):
+- **Sem canal workspace-room-read**: Verifica que AdminWorkspace NAO cria canal `workspace-room-read-*`
+- **visitor_last_read_at via onRoomStatusChange**: Simula payload com `visitor_last_read_at` e verifica que state atualiza
+- **Debounce 10s no pendingRefreshTrigger**: Simula 5 eventos rapidos de `onRoomStatusChange` — verifica que `setPendingRefreshTrigger` incrementa apenas 1 vez apos 10s
 
-- Trocar `event: "*"` para `event: "UPDATE"`
+### 6. `src/components/chat/__tests__/PendingRoomsList.debounce.test.ts`
+Valida Fix 2.3 (debounce 5s):
+- **Debounce 5s no refreshTrigger**: Muda `refreshTrigger` 3 vezes em 1s — verifica que `fetchPendingRooms` executa apenas 1 vez apos 5s
+- **Primeiro load sem debounce**: Verifica que `refreshTrigger === 0` executa imediatamente (sem delay)
 
-## Fix 2.1 — Remover pg_changes do `VisitorInfoPanel`
+## Detalhes Tecnicos
 
-**Arquivo**: `src/components/chat/VisitorInfoPanel.tsx` (linhas 419-453)
+- Mock do `supabase` com chainable queries (padrao existente)
+- Mock do `useTenantRealtime` retornando callbacks controlaveis
+- `vi.useFakeTimers()` para testar debounces e intervals
+- Nao precisa de usuarios reais no banco — os mocks simulam os payloads exatos que o Supabase enviaria
+- Total: ~6 arquivos de teste, ~20 cenarios
 
-- Remover o `useEffect` inteiro que cria o canal `visitor-panel-{visitorId}`
+## Arquivos criados/modificados
 
-## Fix 2.2 — Remover canal per-room `visitor_last_read_at`
+| Arquivo | Tipo |
+|---------|------|
+| `src/hooks/__tests__/useAttendantQueues.test.ts` | Novo |
+| `src/hooks/__tests__/useChatMessages.test.ts` | Novo |
+| `src/contexts/__tests__/TenantRealtimeContext.test.ts` | Novo |
+| `src/components/chat/__tests__/VisitorInfoPanel.perf.test.ts` | Novo |
+| `src/pages/__tests__/WorkspaceDebounce.test.ts` | Novo |
+| `src/components/chat/__tests__/PendingRoomsList.debounce.test.ts` | Novo |
 
-**Arquivos**: `AdminWorkspace.tsx` (linhas 208-222) + `AttendantLite.tsx` (linhas 109-116) + `TenantRealtimeContext.tsx`
-
-- Adicionar `visitor_last_read_at?: string | null` ao `RoomStatusPayload` (interface, linha 7-15)
-- Incluir `visitor_last_read_at` no mapping do safety net (linha 141-150)
-- AdminWorkspace: remover canal `workspace-room-read-{roomId}`. Adicionar `onRoomStatusChange` que atualiza `visitorLastReadAt` quando `room_id === selectedRoomId`
-- AttendantLite: remover canal `lite-room-read-{roomId}`. Mesmo approach via `onRoomStatusChange`
-
-## Fix 2.3 — Debounce em PendingRoomsList e pendingRefreshTrigger
-
-**Arquivo**: `src/components/chat/PendingRoomsList.tsx` (linhas 88-91)
-- Adicionar `setTimeout` de 5s com limpeza no `useEffect` do `refreshTrigger`
-
-**Arquivos**: `AdminWorkspace.tsx` (linhas 92-98) + `AttendantLite.tsx` (linhas 86-89)
-- Substituir incremento imediato por `setTimeout` de 10s com limpeza
-
----
-
-## Arquivos modificados
-
-| Arquivo | Fixes |
-|---------|-------|
-| `src/hooks/useChatRealtime.ts` | 1.1 + 1.2 |
-| `src/contexts/TenantRealtimeContext.tsx` | 1.3 + 2.2 (payload + event filter) |
-| `src/components/chat/VisitorInfoPanel.tsx` | 2.1 |
-| `src/pages/AdminWorkspace.tsx` | 2.2 + 2.3 |
-| `src/pages/AttendantLite.tsx` | 2.2 + 2.3 |
-| `src/components/chat/PendingRoomsList.tsx` | 2.3 |
-
-## Economia estimada
-
-```text
-Fix                                Antes/h    Depois/h
-─────────────────────────────────────────────────────────
-1.1 useAttendantQueues polling      3.960         90
-1.2 chat_messages UPDATE WAL          300        150
-1.3 attendant_profiles WAL            200         40
-2.1 VisitorInfoPanel WAL              600          0
-2.2 Per-room visitor_read WAL       1.200          0
-2.3 Debounces                         700        100
-─────────────────────────────────────────────────────────
-TOTAL                              ~6.960       ~380
-```
-
-Reducao: **~6.300 req/hora** (~14% do total). Fase 3 (consolidacao Widget) adiciona mais ~6.000.
+Nenhum arquivo de producao sera modificado.
 
