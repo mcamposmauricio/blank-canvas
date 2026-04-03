@@ -29,7 +29,7 @@ describe("PendingRoomsList debounce (Fix 2.3)", () => {
     let callCount = 0;
     const fetchPendingRooms = () => { callCount++; };
 
-    const refreshTrigger = 1;
+    const refreshTrigger: number = 1;
     const delay = refreshTrigger === 0 ? 0 : 5000;
     const timer = setTimeout(fetchPendingRooms, delay);
 
