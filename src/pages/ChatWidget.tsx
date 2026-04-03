@@ -1497,45 +1497,54 @@ const ChatWidget = () => {
         {/* ===== WAITING PHASE ===== */}
         {!initLoading && phase === "waiting" && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Indeterminate progress bar */}
-            <div className="h-0.5 w-full bg-muted overflow-hidden">
-              <div className="h-full w-1/3 rounded-full animate-indeterminate" style={{ backgroundColor: primaryColor }} />
+            {/* Gradient progress bar */}
+            <div className="h-1 w-full overflow-hidden" style={{ backgroundColor: `${primaryColor}15` }}>
+              <div className="h-full w-1/3 rounded-full animate-indeterminate" style={{ background: `linear-gradient(90deg, transparent, ${primaryColor}, transparent)` }} />
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
-              <div className="relative">
-                <MessageSquare className="h-12 w-12 relative z-10" style={{ color: primaryColor, opacity: 0.7 }} />
-                {!allBusy && !outsideHours && (
-                  <>
-                    <span className="absolute inset-0 rounded-full animate-ripple" style={{ backgroundColor: `${primaryColor}20` }} />
-                    <span className="absolute inset-0 rounded-full animate-ripple" style={{ backgroundColor: `${primaryColor}15`, animationDelay: "0.6s" }} />
-                  </>
+            <div className="flex-1 flex flex-col items-center justify-center p-4 gap-5">
+              {/* Animated concentric pulse rings */}
+              <div className="relative flex items-center justify-center w-20 h-20">
+                <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `2px solid ${primaryColor}`, opacity: 0.4 }} />
+                <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `2px solid ${primaryColor}`, opacity: 0.3, animationDelay: '0.6s' }} />
+                <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `2px solid ${primaryColor}`, opacity: 0.2, animationDelay: '1.2s' }} />
+                {outsideHours ? (
+                  <Clock className="h-8 w-8 relative z-10" style={{ color: primaryColor }} />
+                ) : allBusy ? (
+                  <Users className="h-8 w-8 relative z-10" style={{ color: primaryColor }} />
+                ) : (
+                  <MessageSquare className="h-8 w-8 relative z-10" style={{ color: primaryColor }} />
                 )}
               </div>
+
               {outsideHours && (widgetConfig?.show_outside_hours_banner ?? true) ? (
-                <div className="text-center space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 max-w-xs animate-fade-in">
-                  <p className="text-sm font-medium text-blue-800">
+                <div className="text-center space-y-2 rounded-2xl px-5 py-4 max-w-xs animate-fade-in" style={{ backgroundColor: `${primaryColor}08`, border: `1px solid ${primaryColor}20` }}>
+                  <p className="text-sm font-semibold" style={{ color: primaryColor }}>
                     {widgetConfig?.outside_hours_title ?? "Estamos fora do horário de atendimento."}
                   </p>
-                  <p className="text-xs text-blue-700">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     {widgetConfig?.outside_hours_message ?? "Sua mensagem ficará registrada e responderemos assim que voltarmos."}
                   </p>
                 </div>
               ) : allBusy && (widgetConfig?.show_all_busy_banner ?? true) ? (
-                <div className="text-center space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 max-w-xs animate-fade-in">
-                  <p className="text-sm font-medium text-amber-800">
+                <div className="text-center space-y-2 rounded-2xl px-5 py-4 max-w-xs animate-fade-in" style={{ backgroundColor: `${primaryColor}08`, border: `1px solid ${primaryColor}20` }}>
+                  <p className="text-sm font-semibold" style={{ color: primaryColor }}>
                     {widgetConfig?.all_busy_title ?? "Todos os atendentes estão ocupados no momento."}
                   </p>
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     {widgetConfig?.all_busy_message ?? "Você está na fila e será atendido em breve. Por favor, aguarde."}
                   </p>
                 </div>
               ) : (
-                <div className="text-center animate-fade-in">
-                  <p className="text-sm text-muted-foreground">
+                <div className="text-center animate-fade-in space-y-1">
+                  <p className="text-sm font-medium text-foreground">
                     {widgetConfig?.waiting_message ?? "Aguardando atendimento"}
-                    <span className="inline-block w-6 text-left">...</span>
+                    <span className="inline-flex ml-0.5 gap-[2px]">
+                      <span className="w-1 h-1 rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor }} />
+                      <span className="w-1 h-1 rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor, animationDelay: '0.3s' }} />
+                      <span className="w-1 h-1 rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor, animationDelay: '0.6s' }} />
+                    </span>
                   </p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">Você será conectado em breve.</p>
+                  <p className="text-xs text-muted-foreground/60">Você será conectado em breve.</p>
                 </div>
               )}
             </div>
