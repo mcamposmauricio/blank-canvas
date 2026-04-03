@@ -81,6 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Effective tenantId: impersonated overrides selected overrides real
   const effectiveTenantId = impersonatedTenantId ?? tenantId;
 
+  const isModuleEnabled = useCallback(
+    (module: string): boolean => {
+      // Master not impersonating sees everything
+      if (isMaster && !isImpersonating) return true;
+      const rootModule = module.split('.')[0];
+      return !disabledModules.has(rootModule);
+    },
+    [isMaster, isImpersonating, disabledModules]
+  );
+
   // Whether user needs to pick a tenant
   const needsTenantSelection = availableTenants.length > 1 && !tenantId && !isImpersonating && !isMaster;
 
