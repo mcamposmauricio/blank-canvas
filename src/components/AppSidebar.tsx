@@ -75,7 +75,7 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
   const location = useLocation();
   const { toast } = useToast();
   const { t, language, setLanguage } = useLanguage();
-  const { user, isAdmin, isMaster, hasPermission, userDataLoading, isImpersonating, impersonatedTenantName } = useAuth();
+  const { user, isAdmin, isMaster, hasPermission, isModuleEnabled, userDataLoading, isImpersonating, impersonatedTenantName } = useAuth();
   const { state } = useSidebar();
   
   const collapsed = state === "collapsed";
