@@ -206,10 +206,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (resolvedTenantId) {
       const { data: disabledMods } = await supabase
         .from("tenant_modules")
-        .select("module_key")
+        .select("module")
         .eq("tenant_id", resolvedTenantId)
         .eq("is_enabled", false);
-      setDisabledModules(new Set((disabledMods || []).map(m => m.module_key)));
+      setDisabledModules(new Set((disabledMods || []).map(m => m.module)));
     } else {
       setDisabledModules(new Set());
     }

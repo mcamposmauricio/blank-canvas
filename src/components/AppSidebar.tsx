@@ -509,7 +509,7 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
             )}
 
             {/* CS Module */}
-            {(hasPermission("cs", "view") || hasPermission("cs.dashboard", "view") || hasPermission("cs.trails", "view") || hasPermission("cs.health", "view")) && (
+            {isModuleEnabled('cs') && (hasPermission("cs", "view") || hasPermission("cs.dashboard", "view") || hasPermission("cs.trails", "view") || hasPermission("cs.health", "view")) && (
               <SidebarGroup>
                 <Collapsible>
                   <CollapsibleTrigger asChild>
