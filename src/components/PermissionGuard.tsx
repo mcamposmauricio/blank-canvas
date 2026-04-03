@@ -12,7 +12,7 @@ interface PermissionGuardProps {
 }
 
 export function PermissionGuard({ module, action = "view", requireMaster = false, children }: PermissionGuardProps) {
-  const { hasPermission, isMaster, loading, userDataLoading } = useAuth();
+  const { hasPermission, isMaster, isModuleEnabled, loading, userDataLoading } = useAuth();
   const navigate = useNavigate();
 
   if (loading || userDataLoading) {
@@ -24,6 +24,12 @@ export function PermissionGuard({ module, action = "view", requireMaster = false
   }
 
   if (requireMaster && !isMaster) {
+    return <AccessDenied onBack={() => navigate("/home")} />;
+  }
+
+  // Tenant module override — check root module
+  const rootModule = module.split('.')[0];
+  if (!isModuleEnabled(rootModule)) {
     return <AccessDenied onBack={() => navigate("/home")} />;
   }
 

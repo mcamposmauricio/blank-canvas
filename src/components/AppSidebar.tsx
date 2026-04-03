@@ -75,7 +75,7 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
   const location = useLocation();
   const { toast } = useToast();
   const { t, language, setLanguage } = useLanguage();
-  const { user, isAdmin, isMaster, hasPermission, userDataLoading, isImpersonating, impersonatedTenantName } = useAuth();
+  const { user, isAdmin, isMaster, hasPermission, isModuleEnabled, userDataLoading, isImpersonating, impersonatedTenantName } = useAuth();
   const { state } = useSidebar();
   
   const collapsed = state === "collapsed";
@@ -96,10 +96,10 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
   const [contactsOpen, handleContactsOpen] = usePersistedState("sidebar-contacts-open");
   const [helpOpen, handleHelpOpen] = usePersistedState("sidebar-help-open");
 
-  const showChat = hasPermission("chat", "view") || hasPermission("chat.workspace", "view") || hasPermission("chat.history", "view") || hasPermission("chat.broadcasts", "view");
-  const showNPS = hasPermission("nps", "view") || hasPermission("nps.dashboard", "view") || hasPermission("nps.campaigns", "view");
-  const showContacts = hasPermission("contacts", "view") || hasPermission("contacts.companies", "view") || hasPermission("contacts.people", "view");
-  const showHelp = hasPermission("help", "view") || hasPermission("help.articles", "view") || hasPermission("help.collections", "view");
+  const showChat = isModuleEnabled('chat') && (hasPermission("chat", "view") || hasPermission("chat.workspace", "view") || hasPermission("chat.history", "view") || hasPermission("chat.broadcasts", "view"));
+  const showNPS = isModuleEnabled('nps') && (hasPermission("nps", "view") || hasPermission("nps.dashboard", "view") || hasPermission("nps.campaigns", "view"));
+  const showContacts = isModuleEnabled('contacts') && (hasPermission("contacts", "view") || hasPermission("contacts.companies", "view") || hasPermission("contacts.people", "view"));
+  const showHelp = isModuleEnabled('help') && (hasPermission("help", "view") || hasPermission("help.articles", "view") || hasPermission("help.collections", "view"));
   const { teamAttendants, otherTeamAttendants, totalActiveChats, otherTeamsTotalChats, unassignedCount } = useSidebarData();
 
   const isActive = (path: string) => location.pathname === path;
@@ -509,7 +509,7 @@ export function AppSidebar({ isDark, onToggleTheme }: AppSidebarProps) {
             )}
 
             {/* CS Module */}
-            {(hasPermission("cs", "view") || hasPermission("cs.dashboard", "view") || hasPermission("cs.trails", "view") || hasPermission("cs.health", "view")) && (
+            {isModuleEnabled('cs') && (hasPermission("cs", "view") || hasPermission("cs.dashboard", "view") || hasPermission("cs.trails", "view") || hasPermission("cs.health", "view")) && (
               <SidebarGroup>
                 <Collapsible>
                   <CollapsibleTrigger asChild>

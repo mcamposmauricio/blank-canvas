@@ -25,6 +25,7 @@ interface AuthContextType {
   tenantId: string | null;
   permissions: UserPermission[];
   hasPermission: (module: string, action: 'view' | 'edit' | 'delete' | 'manage') => boolean;
+  isModuleEnabled: (module: string) => boolean;
   // Multi-tenant
   availableTenants: TenantOption[];
   selectTenant: (tenantId: string) => void;
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isMaster, setIsMaster] = useState(false);
   const [isChatEnabled, setIsChatEnabled] = useState(false);
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
+  const [disabledModules, setDisabledModules] = useState<Set<string>>(new Set());
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [userDataLoading, setUserDataLoading] = useState(false);
@@ -78,6 +80,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Effective tenantId: impersonated overrides selected overrides real
   const effectiveTenantId = impersonatedTenantId ?? tenantId;
+
+  const isModuleEnabled = useCallback(
+    (module: string): boolean => {
+      // Master not impersonating sees everything
+      if (isMaster && !isImpersonating) return true;
+      const rootModule = module.split('.')[0];
+      return !disabledModules.has(rootModule);
+    },
+    [isMaster, isImpersonating, disabledModules]
+  );
 
   // Whether user needs to pick a tenant
   const needsTenantSelection = availableTenants.length > 1 && !tenantId && !isImpersonating && !isMaster;
@@ -184,6 +196,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Load disabled modules for this tenant
+    const resolvedTenantId = userTenantIds.length === 1
+      ? userTenantIds[0]
+      : (localStorage.getItem("selected-tenant-id") && userTenantIds.includes(localStorage.getItem("selected-tenant-id")!))
+        ? localStorage.getItem("selected-tenant-id")!
+        : userTenantIds[0];
+
+    if (resolvedTenantId) {
+      const { data: disabledMods } = await supabase
+        .from("tenant_modules")
+        .select("module")
+        .eq("tenant_id", resolvedTenantId)
+        .eq("is_enabled", false);
+      setDisabledModules(new Set((disabledMods || []).map(m => m.module)));
+    } else {
+      setDisabledModules(new Set());
+    }
+
     // Only update last_sign_in_at if profile already exists (no upsert — prevents orphan profile creation)
     if (profiles && profiles.length > 0) {
       await supabase.from("user_profiles")
@@ -244,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isChatEnabled: isImpersonating ? true : isChatEnabled,
       loading, userDataLoading,
       tenantId: effectiveTenantId,
-      permissions, hasPermission,
+      permissions, hasPermission, isModuleEnabled,
       availableTenants, selectTenant, needsTenantSelection,
       isImpersonating, impersonatedTenantName,
       setImpersonation, clearImpersonation,
