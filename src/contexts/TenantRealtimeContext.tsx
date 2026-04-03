@@ -207,7 +207,7 @@ export function TenantRealtimeProvider({ children }: { children: ReactNode }) {
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
           table: "attendant_profiles",
           ...(tenantId ? { filter: `tenant_id=eq.${tenantId}` } : {}),

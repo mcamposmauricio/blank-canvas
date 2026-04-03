@@ -210,20 +210,16 @@ const AdminWorkspace = () => {
       })
       .subscribe();
 
-    // Subscribe to room updates for visitor_last_read_at changes
-    const roomChannel = supabase
-      .channel(`workspace-room-read-${selectedRoomId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_rooms", filter: `id=eq.${selectedRoomId}` }, (payload) => {
-        const room = payload.new as any;
-        if (room.visitor_last_read_at) {
-          setVisitorLastReadAt(room.visitor_last_read_at);
-        }
-      })
-      .subscribe();
+    // Listen for visitor_last_read_at via TenantRealtime safety net (no extra pg_changes channel)
+    const unsubRead = onRoomStatusChange((payload) => {
+      if (payload.room_id === selectedRoomId && payload.visitor_last_read_at) {
+        setVisitorLastReadAt(payload.visitor_last_read_at);
+      }
+    });
 
     return () => {
       supabase.removeChannel(channel);
-      supabase.removeChannel(roomChannel);
+      unsubRead();
     };
   }, [selectedRoomId, user?.id]);
 
