@@ -1,82 +1,71 @@
 
 
-# Fase 3: Consolidacao de Canais do Widget (mantendo Typing Indicator)
+# Plano: Bateria de Testes — Validacao da Fase 3 (Consolidacao de Canais)
 
-## Resumo
+## Objetivo
 
-Consolida 3 canais `pg_changes` do Widget em 1 unico canal. Typing indicator mantido intacto. Total: 4 canais por visitante reduzidos para 2 (1 pg_changes + 1 broadcast).
+Criar testes automatizados que validam que a consolidacao dos 3 canais pg_changes em 1 canal unico no ChatWidget nao quebrou nenhum fluxo: recepcao de mensagens, transicoes de fase, deteccao de mensagens deletadas, chats proativos, typing indicator e contadores de unread.
 
-## Situacao Atual
+## Abordagem
 
-```text
-Canal                              Tipo           Custo WAL
-─────────────────────────────────────────────────────────────
-widget-messages-{roomId}           pg_changes     Alto (INSERT+UPDATE)
-widget-room-{roomId}               pg_changes     Alto (UPDATE)
-widget-visitor-{visitorId}         pg_changes     Alto (INSERT+UPDATE)
-typing-{roomId}                    broadcast      Zero
-```
+Testes unitarios puros com Vitest, extraindo a logica dos handlers do canal consolidado para funcoes testaveis. Sem dependencia de Supabase real.
 
-4 canais por visitante. 3 geram WAL polling. Com 100 visitantes = 300 conexoes WAL.
+## Testes a Criar
 
-## Plano
+### Arquivo 1: `src/pages/__tests__/ChatWidgetRealtime.test.ts`
 
-### Fix 3.1 — Unificar 3 canais pg_changes em 1
+**Suite 1 — Recepcao de mensagens (INSERT chat_messages)**
+- Mensagem de atendente incrementa unreadCount quando widget fechado
+- Mensagem de atendente NAO incrementa unread quando widget aberto
+- Mensagem duplicada (mesmo id) nao e adicionada duas vezes
+- Mensagens otimisticas (prefixo "optimistic-") sao removidas ao receber mensagem real
+- Mensagem interna (is_internal=true) e ignorada
+- Mensagem deletada (deleted_at != null) e ignorada no INSERT
 
-**Arquivo**: `src/pages/ChatWidget.tsx`
+**Suite 2 — Delecao de mensagens (UPDATE chat_messages)**
+- Mensagem com deleted_at remove do array de mensagens
+- Mensagem sem deleted_at nao altera o array
 
-Substituir os 3 useEffects (linhas 441-666) por 1 unico useEffect com canal consolidado `widget-realtime-{visitorId}-{suffix}`:
+**Suite 3 — Transicoes de fase (UPDATE chat_rooms por roomId)**
+- Room status "active" + phase "waiting" → phase "chat"
+- Room status "closed" + resolution "resolved" → phase "csat"
+- Room status "closed" + resolution "archived" → phase "closed"
+- Room status "closed" + resolution "pending" → phase "viewTranscript"
 
-```text
-Canal unico: widget-realtime-{visitorId}-{suffix}
-  ├─ pg_changes INSERT chat_messages  (filter: room_id=eq.{roomId})
-  ├─ pg_changes UPDATE chat_messages  (filter: room_id=eq.{roomId})
-  ├─ pg_changes UPDATE chat_rooms     (filter: id=eq.{roomId})
-  ├─ pg_changes INSERT chat_rooms     (filter: visitor_id=eq.{visitorId})
-  └─ pg_changes UPDATE chat_rooms     (filter: visitor_id=eq.{visitorId})
-```
+**Suite 4 — Chats proativos (INSERT chat_rooms por visitorId)**
+- Nova room com status "active" → phase "chat" + roomId atualizado
+- Nova room com status != "active" → phase "waiting"
+- Nova room NAO processa se phase atual e "chat", "waiting" ou "csat"
+- Nova room incrementa unreadCount se widget fechado
 
-- Quando `roomId` ou `visitorId` mudam, canal e destruido e recriado (mesmo padrao atual)
-- Toda a logica interna dos handlers permanece identica
-- Se `roomId` for null, apenas os listeners de `chat_rooms` por `visitorId` sao registrados
+**Suite 5 — Reopen de rooms (UPDATE chat_rooms por visitorId)**
+- Room que muda de "closed" para "active" → phase "chat"
+- Room que muda de "closed" para "waiting" → phase "waiting"
+- NAO processa se phase atual e "chat", "waiting" ou "csat"
 
-### Fix 3.2 — Manter canal de typing separado
+**Suite 6 — Typing indicator (broadcast separado)**
+- Receber evento typing seta typingUser com o nome
+- typingUser reseta para null apos timeout
+- Canal de typing so existe quando roomId esta presente
 
-O canal `typing-{roomId}` (linhas 496-513) permanece **inalterado**:
-- Broadcast puro, zero custo WAL
-- Ciclo de vida diferente (so existe com roomId ativo)
-- Nenhuma mudanca necessaria
+### Arquivo 2: `src/pages/__tests__/ChatWidgetChannelStructure.test.ts`
 
-## Resultado
+**Suite — Estrutura do canal consolidado**
+- Canal e criado com nome `widget-realtime-{visitorId}-{suffix}`
+- Com roomId: canal tem 5 listeners (INSERT+UPDATE messages, UPDATE rooms por id, INSERT+UPDATE rooms por visitorId)
+- Sem roomId: canal tem apenas 2 listeners (INSERT+UPDATE rooms por visitorId)
+- Canal de typing e separado com nome `typing-{roomId}`
 
-```text
-                              ANTES    DEPOIS
-─────────────────────────────────────────────
-Canais pg_changes / visitante    3        1
-Canais broadcast / visitante     1        1
-Total canais / visitante         4        2
-───────────────────────────────────────────
-100 visitantes simultaneos:
-  Canais pg_changes            300      100
-  Canais broadcast             100      100
-  Total                        400      200
-```
+## Implementacao
 
-Economia: **~200 conexoes WAL** por 100 visitantes. ~6.000 req/hora a menos.
+Toda a logica dos handlers sera extraida como funcoes puras que recebem state e retornam novo state, permitindo teste sem mocks de Supabase. Os testes replicam o padrao ja existente em `ChatWidget.test.tsx`.
 
-## Riscos
+## Arquivos
 
-| Risco | Prob. | Mitigacao |
-|-------|-------|-----------|
-| Canal consolidado falha ao recriar quando roomId muda | Baixa | Cleanup no return do useEffect, padrao existente |
-| Multiplos .on() perdem eventos | Nenhuma | Supabase suporta nativamente |
-| Typing para de funcionar | Nenhuma | Canal mantido separado, sem alteracao |
+| Arquivo | Tipo |
+|---------|------|
+| `src/pages/__tests__/ChatWidgetRealtime.test.ts` | Novo |
+| `src/pages/__tests__/ChatWidgetChannelStructure.test.ts` | Novo |
 
-## Arquivo Modificado
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/pages/ChatWidget.tsx` | Consolidar 3 useEffects de pg_changes (linhas 441-666) em 1 unico useEffect com canal unificado |
-
-Nenhuma mudanca de banco, edge function ou schema. Typing mantido.
+Nenhum arquivo de producao sera modificado.
 
