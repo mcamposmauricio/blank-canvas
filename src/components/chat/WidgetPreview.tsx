@@ -372,9 +372,9 @@ const WidgetPreview = ({
                     <div className="flex flex-col items-start">
                       <span className="text-[8px] text-muted-foreground mb-0.5 ml-1">Maria</span>
                       <div className="bg-muted px-3 py-2 rounded-xl rounded-bl-sm flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "300ms" }} />
+                        <span className="w-1.5 h-1.5 rounded-full animate-wave-dot" style={{ backgroundColor: `${primaryColor}60` }} />
+                        <span className="w-1.5 h-1.5 rounded-full animate-wave-dot delay-100" style={{ backgroundColor: `${primaryColor}60` }} />
+                        <span className="w-1.5 h-1.5 rounded-full animate-wave-dot delay-200" style={{ backgroundColor: `${primaryColor}60` }} />
                       </div>
                     </div>
                   </div>
