@@ -1,71 +1,99 @@
 
 
-# Plano: Bateria de Testes — Validacao da Fase 3 (Consolidacao de Canais)
+# Plano: Bateria Completa de Testes — Widget + Atendente
 
 ## Objetivo
 
-Criar testes automatizados que validam que a consolidacao dos 3 canais pg_changes em 1 canal unico no ChatWidget nao quebrou nenhum fluxo: recepcao de mensagens, transicoes de fase, deteccao de mensagens deletadas, chats proativos, typing indicator e contadores de unread.
+Criar testes abrangentes que validam todos os fluxos criticos do sistema de chat: Widget (visitante), AdminWorkspace (gestor), AttendantLite (atendente) e hooks compartilhados (`useChatMessages`, `useChatRooms`, `useAttendantQueues`). Cobrindo: contadores, troca de mensagens, transicoes de estado, typing, unread, som, notificacoes e debounce.
 
-## Abordagem
+## Cobertura Existente vs. Gaps
 
-Testes unitarios puros com Vitest, extraindo a logica dos handlers do canal consolidado para funcoes testaveis. Sem dependencia de Supabase real.
+Ja testado:
+- Widget: field classification, JSONB merge, auto-start, realtime handlers (INSERT/UPDATE/proactive/reopen/typing), channel structure
+
+Gaps identificados:
+- `useChatMessages`: INSERT dedup, clear on room switch, pagination (loadMore)
+- `useChatRooms`: room sorting, unread increment via broadcast, inline patch, sound/notification triggers, markRoomAsRead
+- `useAttendantQueues`: inline attendant update, unassigned room tracking, safety-net reconciliation
+- Workspace/Lite typing: channel lifecycle, timeout reset, filtering own user
+- ChatInput typing broadcast: throttle 2s, channel name correctness
+- Widget consolidated channel: dependency array rebuild (visitorId/roomId/phase changes)
 
 ## Testes a Criar
 
-### Arquivo 1: `src/pages/__tests__/ChatWidgetRealtime.test.ts`
+### Arquivo 1: `src/hooks/__tests__/useChatMessagesLogic.test.ts`
 
-**Suite 1 — Recepcao de mensagens (INSERT chat_messages)**
-- Mensagem de atendente incrementa unreadCount quando widget fechado
-- Mensagem de atendente NAO incrementa unread quando widget aberto
-- Mensagem duplicada (mesmo id) nao e adicionada duas vezes
-- Mensagens otimisticas (prefixo "optimistic-") sao removidas ao receber mensagem real
-- Mensagem interna (is_internal=true) e ignorada
-- Mensagem deletada (deleted_at != null) e ignorada no INSERT
+**Suite — Recepcao e paginacao de mensagens**
+- INSERT adiciona mensagem ao array em ordem cronologica
+- Mensagem duplicada (mesmo id) nao e adicionada
+- Ao trocar de room, mensagens sao limpas imediatamente (array vazio)
+- loadMore prepend mensagens anteriores mantendo ordem
+- hasMore = true quando response > PAGE_SIZE, false caso contrario
+- Canal usa sufixo aleatorio para evitar colisao entre instancias
 
-**Suite 2 — Delecao de mensagens (UPDATE chat_messages)**
-- Mensagem com deleted_at remove do array de mensagens
-- Mensagem sem deleted_at nao altera o array
+### Arquivo 2: `src/hooks/__tests__/useChatRoomsLogic.test.ts`
 
-**Suite 3 — Transicoes de fase (UPDATE chat_rooms por roomId)**
-- Room status "active" + phase "waiting" → phase "chat"
-- Room status "closed" + resolution "resolved" → phase "csat"
-- Room status "closed" + resolution "archived" → phase "closed"
-- Room status "closed" + resolution "pending" → phase "viewTranscript"
+**Suite — Ordenacao e unread**
+- Rooms com unread_count > 0 aparecem primeiro
+- Entre rooms com mesmo status de unread, ordena por last_message_at desc
+- Room sem last_message_at usa created_at como fallback
+- markRoomAsRead zera unread_count da room no state local
 
-**Suite 4 — Chats proativos (INSERT chat_rooms por visitorId)**
-- Nova room com status "active" → phase "chat" + roomId atualizado
-- Nova room com status != "active" → phase "waiting"
-- Nova room NAO processa se phase atual e "chat", "waiting" ou "csat"
-- Nova room incrementa unreadCount se widget fechado
+**Suite — Inline update via broadcast**
+- onRoomStatusChange com status "closed" remove room quando excludeClosed=true
+- onRoomStatusChange com status "_deleted" remove room
+- onRoomStatusChange com novo room_id dispara fetchSingleRoom
+- onRoomStatusChange com attendant_id atualiza inline sem refetch
 
-**Suite 5 — Reopen de rooms (UPDATE chat_rooms por visitorId)**
-- Room que muda de "closed" para "active" → phase "chat"
-- Room que muda de "closed" para "waiting" → phase "waiting"
-- NAO processa se phase atual e "chat", "waiting" ou "csat"
+**Suite — Mensagem activity**
+- onNewMessageActivity incrementa unread_count para mensagem de visitor em room nao selecionada
+- onNewMessageActivity NAO incrementa unread se room esta selecionada
+- onNewMessageActivity atualiza last_message e last_message_at
+- Som toca para mensagem de visitor em room nao selecionada quando soundEnabled=true
 
-**Suite 6 — Typing indicator (broadcast separado)**
-- Receber evento typing seta typingUser com o nome
-- typingUser reseta para null apos timeout
-- Canal de typing so existe quando roomId esta presente
+### Arquivo 3: `src/hooks/__tests__/useAttendantQueuesLogic.test.ts`
 
-### Arquivo 2: `src/pages/__tests__/ChatWidgetChannelStructure.test.ts`
+**Suite — Inline updates**
+- onAttendantUpdate atualiza status do atendente por id
+- onAttendantUpdate atualiza active_conversations inline
+- onAttendantUpdate nao altera atendentes com id diferente
+- onRoomStatusChange com closed remove de unassignedRooms
+- onRoomStatusChange com attendant_id remove de unassignedRooms
+- onRoomStatusChange sem attendant_id adiciona a unassignedRooms (dedup)
 
-**Suite — Estrutura do canal consolidado**
-- Canal e criado com nome `widget-realtime-{visitorId}-{suffix}`
-- Com roomId: canal tem 5 listeners (INSERT+UPDATE messages, UPDATE rooms por id, INSERT+UPDATE rooms por visitorId)
-- Sem roomId: canal tem apenas 2 listeners (INSERT+UPDATE rooms por visitorId)
-- Canal de typing e separado com nome `typing-{roomId}`
+### Arquivo 4: `src/components/chat/__tests__/TypingFlow.test.ts`
 
-## Implementacao
+**Suite — Typing lifecycle completo (Workspace + Lite + Widget)**
+- Broadcast de typing seta typingUser com nome recebido
+- typingUser reseta para null apos 3000ms
+- Novo typing antes do timeout reinicia o timer
+- Typing do proprio usuario (mesmo user_id) e ignorado (Workspace/Lite)
+- Canal Workspace usa nome `typing-{roomId}`, Lite usa `typing-lite-{roomId}`
+- Widget typing canal e separado do canal consolidado
+- ChatInput throttle: broadcast so dispara se > 2s desde o ultimo
 
-Toda a logica dos handlers sera extraida como funcoes puras que recebem state e retornam novo state, permitindo teste sem mocks de Supabase. Os testes replicam o padrao ja existente em `ChatWidget.test.tsx`.
+### Arquivo 5: `src/pages/__tests__/WidgetChannelRebuild.test.ts`
+
+**Suite — Rebuild do canal consolidado**
+- Canal e destruido e recriado quando roomId muda
+- Canal e destruido e recriado quando visitorId muda
+- Canal e destruido e recriado quando phase muda
+- Sem visitorId, nenhum canal e criado
+- Sem roomId, canal tem apenas listeners de chat_rooms por visitorId
+
+## Abordagem Tecnica
+
+Todos os testes sao unitarios puros com Vitest. A logica e extraida como funcoes puras que recebem state e retornam novo state, seguindo o padrao ja estabelecido em `ChatWidgetRealtime.test.ts`. Sem mocks de Supabase, sem dependencia de rede.
 
 ## Arquivos
 
 | Arquivo | Tipo |
 |---------|------|
-| `src/pages/__tests__/ChatWidgetRealtime.test.ts` | Novo |
-| `src/pages/__tests__/ChatWidgetChannelStructure.test.ts` | Novo |
+| `src/hooks/__tests__/useChatMessagesLogic.test.ts` | Novo |
+| `src/hooks/__tests__/useChatRoomsLogic.test.ts` | Novo |
+| `src/hooks/__tests__/useAttendantQueuesLogic.test.ts` | Novo |
+| `src/components/chat/__tests__/TypingFlow.test.ts` | Novo |
+| `src/pages/__tests__/WidgetChannelRebuild.test.ts` | Novo |
 
 Nenhum arquivo de producao sera modificado.
 
