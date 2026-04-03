@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, Send, Star, Loader2, X, Plus, ArrowLeft, Clock, CheckCircle2, Paperclip, FileText, Download, ArrowRight, User, Mail, Phone, ArrowDown, Archive } from "lucide-react";
+import { MessageSquare, Send, Star, Loader2, X, Plus, ArrowLeft, Clock, CheckCircle2, Paperclip, FileText, Download, ArrowRight, User, Users, Mail, Phone, ArrowDown, Archive } from "lucide-react";
 import { toast } from "sonner";
 
 type WidgetPhase = "form" | "history" | "waiting" | "chat" | "csat" | "closed" | "viewTranscript";
@@ -1497,45 +1497,54 @@ const ChatWidget = () => {
         {/* ===== WAITING PHASE ===== */}
         {!initLoading && phase === "waiting" && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Indeterminate progress bar */}
-            <div className="h-0.5 w-full bg-muted overflow-hidden">
-              <div className="h-full w-1/3 rounded-full animate-indeterminate" style={{ backgroundColor: primaryColor }} />
+            {/* Gradient progress bar */}
+            <div className="h-1 w-full overflow-hidden" style={{ backgroundColor: `${primaryColor}15` }}>
+              <div className="h-full w-1/3 rounded-full animate-indeterminate" style={{ background: `linear-gradient(90deg, transparent, ${primaryColor}, transparent)` }} />
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
-              <div className="relative">
-                <MessageSquare className="h-12 w-12 relative z-10" style={{ color: primaryColor, opacity: 0.7 }} />
-                {!allBusy && !outsideHours && (
-                  <>
-                    <span className="absolute inset-0 rounded-full animate-ripple" style={{ backgroundColor: `${primaryColor}20` }} />
-                    <span className="absolute inset-0 rounded-full animate-ripple" style={{ backgroundColor: `${primaryColor}15`, animationDelay: "0.6s" }} />
-                  </>
+            <div className="flex-1 flex flex-col items-center justify-center p-4 gap-5">
+              {/* Animated concentric pulse rings */}
+              <div className="relative flex items-center justify-center w-20 h-20">
+                <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `2px solid ${primaryColor}`, opacity: 0.4 }} />
+                <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `2px solid ${primaryColor}`, opacity: 0.3, animationDelay: '0.6s' }} />
+                <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `2px solid ${primaryColor}`, opacity: 0.2, animationDelay: '1.2s' }} />
+                {outsideHours ? (
+                  <Clock className="h-8 w-8 relative z-10" style={{ color: primaryColor }} />
+                ) : allBusy ? (
+                  <Users className="h-8 w-8 relative z-10" style={{ color: primaryColor }} />
+                ) : (
+                  <MessageSquare className="h-8 w-8 relative z-10" style={{ color: primaryColor }} />
                 )}
               </div>
+
               {outsideHours && (widgetConfig?.show_outside_hours_banner ?? true) ? (
-                <div className="text-center space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 max-w-xs animate-fade-in">
-                  <p className="text-sm font-medium text-blue-800">
+                <div className="text-center space-y-2 rounded-2xl px-5 py-4 max-w-xs animate-fade-in" style={{ backgroundColor: `${primaryColor}08`, border: `1px solid ${primaryColor}20` }}>
+                  <p className="text-sm font-semibold" style={{ color: primaryColor }}>
                     {widgetConfig?.outside_hours_title ?? "Estamos fora do horário de atendimento."}
                   </p>
-                  <p className="text-xs text-blue-700">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     {widgetConfig?.outside_hours_message ?? "Sua mensagem ficará registrada e responderemos assim que voltarmos."}
                   </p>
                 </div>
               ) : allBusy && (widgetConfig?.show_all_busy_banner ?? true) ? (
-                <div className="text-center space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 max-w-xs animate-fade-in">
-                  <p className="text-sm font-medium text-amber-800">
+                <div className="text-center space-y-2 rounded-2xl px-5 py-4 max-w-xs animate-fade-in" style={{ backgroundColor: `${primaryColor}08`, border: `1px solid ${primaryColor}20` }}>
+                  <p className="text-sm font-semibold" style={{ color: primaryColor }}>
                     {widgetConfig?.all_busy_title ?? "Todos os atendentes estão ocupados no momento."}
                   </p>
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     {widgetConfig?.all_busy_message ?? "Você está na fila e será atendido em breve. Por favor, aguarde."}
                   </p>
                 </div>
               ) : (
-                <div className="text-center animate-fade-in">
-                  <p className="text-sm text-muted-foreground">
+                <div className="text-center animate-fade-in space-y-1">
+                  <p className="text-sm font-medium text-foreground">
                     {widgetConfig?.waiting_message ?? "Aguardando atendimento"}
-                    <span className="inline-block w-6 text-left">...</span>
+                    <span className="inline-flex ml-0.5 gap-[2px]">
+                      <span className="w-1 h-1 rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor }} />
+                      <span className="w-1 h-1 rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor, animationDelay: '0.3s' }} />
+                      <span className="w-1 h-1 rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor, animationDelay: '0.6s' }} />
+                    </span>
                   </p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">Você será conectado em breve.</p>
+                  <p className="text-xs text-muted-foreground/60">Você será conectado em breve.</p>
                 </div>
               )}
             </div>
@@ -1718,14 +1727,15 @@ const ChatWidget = () => {
               <button
                 key={v}
                 onClick={() => setCsatScore(v)}
-                className="focus:outline-none transition-transform duration-150 hover:scale-110 active:scale-125"
+                className="focus:outline-none transition-all duration-200 hover:scale-125 active:scale-95"
+                style={{ filter: v <= csatScore ? `drop-shadow(0 0 6px ${primaryColor}60)` : 'none' }}
               >
-                <Star className={`h-8 w-8 transition-colors ${v <= csatScore ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground/40"}`} />
+                <Star className={`h-9 w-9 transition-colors ${v <= csatScore ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground/30"}`} />
               </button>
             ))}
           </div>
           {csatScore > 0 && (
-            <p className="text-2xl text-center animate-scale-in">{csatEmoji(csatScore)}</p>
+            <p className="text-3xl text-center animate-scale-in" style={{ filter: `drop-shadow(0 2px 8px ${primaryColor}30)` }}>{csatEmoji(csatScore)}</p>
           )}
           <Textarea
             placeholder="Comentário (opcional)"
@@ -1750,16 +1760,21 @@ const ChatWidget = () => {
 
       {/* CSAT Thank You Screen */}
       {phase === "csat" && (widgetConfig?.show_csat ?? true) && csatSubmitted && (
-        <div className="p-6 flex flex-col items-center justify-center text-center border-t animate-fade-in gap-3">
-          <div className="h-14 w-14 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}15` }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="p-6 flex flex-col items-center justify-center text-center border-t animate-fade-in gap-4 relative overflow-hidden">
+          {/* Confetti particles */}
+          <span className="absolute top-2 left-[20%] w-2 h-2 rounded-full animate-confetti" style={{ backgroundColor: primaryColor, animationDelay: '0s' }} />
+          <span className="absolute top-2 left-[50%] w-1.5 h-1.5 rounded-sm animate-confetti" style={{ backgroundColor: `${primaryColor}80`, animationDelay: '0.2s' }} />
+          <span className="absolute top-2 left-[75%] w-2 h-2 rounded-full animate-confetti" style={{ backgroundColor: `${primaryColor}60`, animationDelay: '0.4s' }} />
+          <span className="absolute top-2 left-[35%] w-1.5 h-1.5 rounded-sm animate-confetti" style={{ backgroundColor: `${primaryColor}90`, animationDelay: '0.6s' }} />
+          <div className="h-16 w-16 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${primaryColor}20, ${primaryColor}08)` }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 13l4 4L19 7" strokeDasharray="24" className="animate-check-draw" />
             </svg>
           </div>
-          <p className="text-sm font-medium">Obrigado pelo seu feedback!</p>
+          <p className="text-sm font-semibold">Obrigado pelo seu feedback!</p>
           <p className="text-xs text-muted-foreground">Sua avaliação nos ajuda a melhorar nosso atendimento.</p>
           <button
-            className="mt-2 w-full h-10 rounded-xl text-sm font-medium text-white transition-all hover:opacity-90 active:scale-[0.98]"
+            className="mt-1 w-full h-10 rounded-xl text-sm font-medium text-white transition-all hover:opacity-90 active:scale-[0.98]"
             onClick={() => {
               setCsatSubmitted(false);
               handleBackToHistory();
@@ -1786,14 +1801,18 @@ const ChatWidget = () => {
 
       {/* ===== CLOSED PHASE ===== */}
       {phase === "closed" && (
-        <div className="p-6 flex flex-col items-center justify-center text-center border-t animate-fade-in gap-3">
-          {/* Animated check */}
-          <div className="h-14 w-14 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}15` }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="p-6 flex flex-col items-center justify-center text-center border-t animate-fade-in gap-4 relative overflow-hidden">
+          {/* Confetti particles */}
+          <span className="absolute top-2 left-[25%] w-2 h-2 rounded-full animate-confetti" style={{ backgroundColor: primaryColor, animationDelay: '0.1s' }} />
+          <span className="absolute top-2 left-[60%] w-1.5 h-1.5 rounded-sm animate-confetti" style={{ backgroundColor: `${primaryColor}70`, animationDelay: '0.3s' }} />
+          <span className="absolute top-2 left-[40%] w-2 h-2 rounded-full animate-confetti" style={{ backgroundColor: `${primaryColor}50`, animationDelay: '0.5s' }} />
+          <div className="h-16 w-16 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${primaryColor}20, ${primaryColor}08)` }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 13l4 4L19 7" strokeDasharray="24" className="animate-check-draw" />
             </svg>
           </div>
-          <p className="text-sm text-muted-foreground">Obrigado pelo feedback!<br/>Esta conversa foi encerrada.</p>
+          <p className="text-sm font-semibold">Obrigado pelo feedback!</p>
+          <p className="text-xs text-muted-foreground">Esta conversa foi encerrada.</p>
         </div>
       )}
 

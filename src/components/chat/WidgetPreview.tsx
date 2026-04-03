@@ -271,11 +271,15 @@ const WidgetPreview = ({
                 <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-2">
                   {showOutsideHoursBanner ? (
                     <>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}20` }}>
-                        <Clock className="h-4 w-4" style={{ color: primaryColor }} />
+                      <div className="relative flex items-center justify-center w-12 h-12">
+                        <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.3 }} />
+                        <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.2, animationDelay: '0.6s' }} />
+                        <Clock className="h-5 w-5 relative z-10" style={{ color: primaryColor }} />
                       </div>
-                      <p className="text-[10px] font-semibold leading-tight">{outsideHoursTitle}</p>
-                      <p className="text-[9px] text-muted-foreground leading-relaxed">{outsideHoursMessage}</p>
+                      <div className="rounded-xl px-3 py-2 space-y-1" style={{ backgroundColor: `${primaryColor}08`, border: `1px solid ${primaryColor}20` }}>
+                        <p className="text-[10px] font-semibold leading-tight" style={{ color: primaryColor }}>{outsideHoursTitle}</p>
+                        <p className="text-[9px] text-muted-foreground leading-relaxed">{outsideHoursMessage}</p>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -291,11 +295,15 @@ const WidgetPreview = ({
                 <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-2">
                   {showAllBusyBanner ? (
                     <>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}20` }}>
-                        <Users className="h-4 w-4" style={{ color: primaryColor }} />
+                      <div className="relative flex items-center justify-center w-12 h-12">
+                        <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.3 }} />
+                        <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.2, animationDelay: '0.6s' }} />
+                        <Users className="h-5 w-5 relative z-10" style={{ color: primaryColor }} />
                       </div>
-                      <p className="text-[10px] font-semibold leading-tight">{allBusyTitle}</p>
-                      <p className="text-[9px] text-muted-foreground leading-relaxed">{allBusyMessage}</p>
+                      <div className="rounded-xl px-3 py-2 space-y-1" style={{ backgroundColor: `${primaryColor}08`, border: `1px solid ${primaryColor}20` }}>
+                        <p className="text-[10px] font-semibold leading-tight" style={{ color: primaryColor }}>{allBusyTitle}</p>
+                        <p className="text-[9px] text-muted-foreground leading-relaxed">{allBusyMessage}</p>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -308,9 +316,23 @@ const WidgetPreview = ({
 
               {/* WAITING */}
               {previewTab === "waiting" && (
-                <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-2">
-                  <Loader2 className="h-5 w-5 animate-spin" style={{ color: primaryColor }} />
-                  <p className="text-[10px] text-muted-foreground">{waitingMessage}</p>
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-2 p-3">
+                  <div className="relative flex items-center justify-center w-10 h-10">
+                    <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.3 }} />
+                    <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ border: `1.5px solid ${primaryColor}`, opacity: 0.2, animationDelay: '0.6s' }} />
+                    <MessageSquare className="h-4 w-4 relative z-10" style={{ color: primaryColor }} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                    {waitingMessage}
+                    <span className="inline-flex gap-[1px] ml-0.5">
+                      <span className="w-[3px] h-[3px] rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor }} />
+                      <span className="w-[3px] h-[3px] rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor, animationDelay: '0.3s' }} />
+                      <span className="w-[3px] h-[3px] rounded-full animate-ellipsis-dot" style={{ backgroundColor: primaryColor, animationDelay: '0.6s' }} />
+                    </span>
+                  </p>
+                  <div className="w-full h-0.5 rounded-full overflow-hidden" style={{ backgroundColor: `${primaryColor}15` }}>
+                    <div className="h-full w-1/3 rounded-full animate-indeterminate" style={{ background: `linear-gradient(90deg, transparent, ${primaryColor}, transparent)` }} />
+                  </div>
                 </div>
               )}
 
@@ -350,9 +372,9 @@ const WidgetPreview = ({
                     <div className="flex flex-col items-start">
                       <span className="text-[8px] text-muted-foreground mb-0.5 ml-1">Maria</span>
                       <div className="bg-muted px-3 py-2 rounded-xl rounded-bl-sm flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "300ms" }} />
+                        <span className="w-1.5 h-1.5 rounded-full animate-wave-dot" style={{ backgroundColor: `${primaryColor}60` }} />
+                        <span className="w-1.5 h-1.5 rounded-full animate-wave-dot delay-100" style={{ backgroundColor: `${primaryColor}60` }} />
+                        <span className="w-1.5 h-1.5 rounded-full animate-wave-dot delay-200" style={{ backgroundColor: `${primaryColor}60` }} />
                       </div>
                     </div>
                   </div>
@@ -373,11 +395,19 @@ const WidgetPreview = ({
               {previewTab === "csat" && (
                 <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-3">
                   <p className="text-[11px] font-semibold">Avalie o atendimento</p>
-                  <div className="flex gap-1">
+                  {csatRating > 0 && (
+                    <p className="text-lg animate-scale-in">{["😞","😕","😐","😊","🤩"][csatRating - 1]}</p>
+                  )}
+                  <div className="flex gap-1.5">
                     {[1, 2, 3, 4, 5].map((s) => (
-                      <button key={s} onClick={() => setCsatRating(s)}>
+                      <button
+                        key={s}
+                        onClick={() => setCsatRating(s)}
+                        className="transition-all duration-200 hover:scale-125"
+                        style={{ filter: s <= csatRating ? `drop-shadow(0 0 4px ${primaryColor}50)` : 'none' }}
+                      >
                         <Star
-                          className="h-5 w-5 transition-colors"
+                          className="h-6 w-6 transition-colors"
                           fill={s <= csatRating ? primaryColor : "transparent"}
                           stroke={s <= csatRating ? primaryColor : "currentColor"}
                           strokeWidth={1.5}
@@ -385,16 +415,16 @@ const WidgetPreview = ({
                       </button>
                     ))}
                   </div>
-                  <div className="w-full h-12 bg-muted rounded border text-[9px] px-2 pt-1.5 text-left text-muted-foreground">
+                  <div className="w-full h-12 bg-muted rounded-lg border text-[9px] px-2 pt-1.5 text-left text-muted-foreground">
                     Comentário (opcional)
                   </div>
                   <div className="flex gap-2 w-full">
-                    <div className="flex-1 h-7 rounded-md border border-border flex items-center justify-center text-[10px] text-muted-foreground font-medium">
+                    <div className="flex-1 h-7 rounded-lg border border-border flex items-center justify-center text-[10px] text-muted-foreground font-medium">
                       Pular
                     </div>
                     <div
-                      className="flex-1 h-7 rounded-md flex items-center justify-center text-[10px] text-white font-medium"
-                      style={{ backgroundColor: primaryColor }}
+                      className="flex-1 h-7 rounded-lg flex items-center justify-center text-[10px] text-white font-medium"
+                      style={{ background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)` }}
                     >
                       Enviar
                     </div>
@@ -404,9 +434,12 @@ const WidgetPreview = ({
 
               {/* CLOSED */}
               {previewTab === "closed" && (
-                <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-2">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}20` }}>
-                    <CheckCircle2 className="h-5 w-5" style={{ color: primaryColor }} />
+                <div className="flex-1 p-3 flex flex-col items-center justify-center text-center space-y-2 relative overflow-hidden">
+                  <span className="absolute top-1 left-[25%] w-1.5 h-1.5 rounded-full animate-confetti" style={{ backgroundColor: primaryColor, animationDelay: '0.1s' }} />
+                  <span className="absolute top-1 left-[60%] w-1 h-1 rounded-sm animate-confetti" style={{ backgroundColor: `${primaryColor}70`, animationDelay: '0.3s' }} />
+                  <span className="absolute top-1 left-[40%] w-1.5 h-1.5 rounded-full animate-confetti" style={{ backgroundColor: `${primaryColor}50`, animationDelay: '0.5s' }} />
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${primaryColor}20, ${primaryColor}08)` }}>
+                    <CheckCircle2 className="h-6 w-6" style={{ color: primaryColor }} />
                   </div>
                   <p className="text-[11px] font-semibold leading-tight">Obrigado pelo feedback!</p>
                   <p className="text-[9px] text-muted-foreground">Esta conversa foi encerrada.</p>

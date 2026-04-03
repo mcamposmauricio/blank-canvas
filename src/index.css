@@ -235,6 +235,28 @@
 }
 .animate-indeterminate { animation: indeterminate 1.5s ease-in-out infinite; }
 
+/* Widget — pulse ring (concentric circles) */
+@keyframes pulse-ring {
+  0%   { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.animate-pulse-ring { animation: pulse-ring 2s ease-out infinite; }
+
+/* Widget — confetti fall */
+@keyframes confetti-fall {
+  0%   { transform: translateY(-8px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(40px) rotate(360deg); opacity: 0; }
+}
+.animate-confetti { animation: confetti-fall 1.8s ease-in forwards; }
+
+/* Widget — ellipsis dots */
+@keyframes ellipsis-dot {
+  0%, 20%  { opacity: 0; }
+  40%      { opacity: 1; }
+  60%, 100% { opacity: 0; }
+}
+.animate-ellipsis-dot { animation: ellipsis-dot 1.4s ease-in-out infinite; }
+
 /* Widget chat — ellipsis trailing dots */
 @keyframes ellipsis {
   0%   { content: ''; }
