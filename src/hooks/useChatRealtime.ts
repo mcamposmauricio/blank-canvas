@@ -135,21 +135,7 @@ export function useChatMessages(roomId: string | null) {
           setMessages((prev) => [...prev, payload.new as ChatMessage]);
         }
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "chat_messages",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          const updated = payload.new as ChatMessage;
-          setMessages((prev) =>
-            prev.map((m) => (m.id === updated.id ? updated : m))
-          );
-        }
-      )
+      // UPDATE listener removed for performance — soft-deletes handled on room switch refetch
       .subscribe();
 
     return () => {
