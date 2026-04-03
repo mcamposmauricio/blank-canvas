@@ -1,91 +1,88 @@
 
 
-# Plano: Redesign Visual do Widget — Todas as Telas + Preview
+# Plano: Corrigir Historico Nao Carregando no Widget (Visitors Duplicados)
 
-## Resumo
+## Problema
 
-Modernizar o visual de todas as telas de status do widget (fora do horario, ocupados, aguardando, closed) e do preview nas configuracoes. CSAT mantem labels/textos intactos, recebe apenas melhorias visuais (emoji maior, glow nas estrelas). Preview espelha fielmente o novo design.
+O widget do "Sukita Loco" (e potencialmente qualquer cliente) nao carrega conversas anteriores porque a funcao `findOrCreateVisitor` cria visitantes duplicados para o mesmo `company_contact_id`.
 
-## Mudancas por Arquivo
+**Dados concretos**: O `company_contact_id` `15ba4b66...` (Administrador Kev) tem **10 registros de visitor** no banco. O visitor original (`c6499438`) tem 45 salas, mas os visitors mais recentes tem 0. Quando o widget abre, usa o token do visitor mais novo (sem salas), logo o historico aparece vazio.
 
-### 1. `src/pages/ChatWidget.tsx`
+**Causa raiz**: A funcao `findOrCreateVisitor` na edge function `resolve-chat-visitor` usa `.maybeSingle()` para buscar visitor por `company_contact_id`. Quando existem duplicatas (criadas por race condition — 2 chamadas paralelas no mesmo segundo), `.maybeSingle()` retorna `null` (Supabase retorna erro quando ha mais de 1 resultado), fazendo a funcao criar MAIS um visitor. Isso piora o problema progressivamente.
 
-**Tela Outside Hours (linha ~1514-1522)**
-- Substituir `bg-blue-50 border-blue-200 text-blue-800` por card usando `primaryColor` com opacidade
-- Adicionar icone decorativo `Clock` com circulos concentricos animados (pulse suave)
-- Titulo com `font-semibold` e subtitulo com spacing melhorado
+## Solucao (2 partes)
 
-**Tela All Busy (linha ~1523-1531)**
-- Substituir `bg-amber-50 border-amber-200 text-amber-800` por card usando `primaryColor` com opacidade (mesmo padrao do outside hours)
-- Adicionar icone `Users` com circulos decorativos animados
-- Mesmo padrao visual do outside hours para consistencia
+### 1. Edge Function: Trocar `.maybeSingle()` por `.limit(1).single()` + consolidar
 
-**Tela Waiting normal (linha ~1497-1541)**
-- Substituir `MessageSquare` + ripple por 3 circulos concentricos animados com `primaryColor` (pulse moderno com delays escalonados)
-- Barra de progresso com gradiente usando `primaryColor`
-- Texto de "Aguardando" com animacao de ellipsis CSS
+**`supabase/functions/resolve-chat-visitor/index.ts`** — funcao `findOrCreateVisitor`:
 
-**Tela Closed (linha ~1788-1798)**
-- Circulo de sucesso maior (h-16 w-16) com gradiente suave
-- Animacao de confetti CSS sutil (4 particulas com keyframes)
-- Tipografia melhorada no texto de agradecimento
+- Substituir a query de lookup por `.order("created_at", { ascending: true }).limit(1)` para sempre retornar o visitor mais antigo (que tem mais historico)
+- Adicionar `UNIQUE` constraint nao e viavel (ja existem duplicatas), entao a solucao e tolerante a duplicatas
 
-**Tela CSAT (linha ~1712-1749)**
-- SEM alteracao de textos/labels ("Avalie o atendimento", "Comentario (opcional)", "Enviar Avaliacao" mantidos)
-- Estrelas maiores (h-9 w-9) com hover glow sutil usando box-shadow
-- Emoji reativo maior com animacao de escala mais expressiva
+Mudanca especifica:
+```text
+// ANTES (linha 432-436):
+.eq("company_contact_id", companyContactId)
+.maybeSingle();
 
-**Tela CSAT Thank You (linha ~1752-1772)**
-- Circulo maior com gradiente, confetti sutil
-- Melhor espacamento e tipografia
+// DEPOIS:
+.eq("company_contact_id", companyContactId)
+.order("created_at", { ascending: true })
+.limit(1)
+.maybeSingle();
+```
 
-### 2. `src/components/chat/WidgetPreview.tsx`
+Isso garante que mesmo com duplicatas, sempre retorna o visitor mais antigo (que contem o historico real).
 
-Espelhar o novo design em cada tab do preview:
+### 2. Migration: Consolidar visitors duplicados existentes
 
-**Tab outside_hours (linha ~270-287)**
-- Adicionar circulos decorativos animados ao redor do icone Clock
-- Card com borda usando `primaryColor` com opacidade em vez de cor neutra
+Criar uma migration SQL que:
+- Identifica visitors duplicados por `company_contact_id`
+- Para cada grupo, mantém o mais antigo (que tem mais rooms)
+- Move todas as `chat_rooms` dos duplicados para o visitor primario (`UPDATE chat_rooms SET visitor_id = primary WHERE visitor_id IN (duplicates)`)
+- Deleta os visitors orfaos
 
-**Tab all_busy (linha ~290-306)**
-- Mesmo padrao do outside_hours para consistencia
+```sql
+-- Mover rooms de visitors duplicados para o primario (mais antigo)
+WITH ranked AS (
+  SELECT id, company_contact_id,
+    ROW_NUMBER() OVER (PARTITION BY company_contact_id ORDER BY created_at ASC) as rn
+  FROM chat_visitors
+  WHERE company_contact_id IS NOT NULL
+),
+primaries AS (
+  SELECT id as primary_id, company_contact_id FROM ranked WHERE rn = 1
+),
+duplicates AS (
+  SELECT r.id as dup_id, p.primary_id
+  FROM ranked r
+  JOIN primaries p ON p.company_contact_id = r.company_contact_id
+  WHERE r.rn > 1
+)
+UPDATE chat_rooms SET visitor_id = d.primary_id
+FROM duplicates d WHERE chat_rooms.visitor_id = d.dup_id;
 
-**Tab waiting (linha ~310-315)**
-- Substituir `Loader2 animate-spin` por 3 circulos concentricos animados (versao miniatura do widget real)
-- Adicionar barra de progresso miniatura
-
-**Tab csat (linha ~373-402)**
-- Estrelas maiores com hover glow
-- Adicionar emoji reativo acima das estrelas
-- Manter textos: "Avalie o atendimento", "Comentario (opcional)", "Pular", "Enviar"
-
-**Tab closed (linha ~406-419)**
-- Circulo maior com gradiente
-- Confetti CSS miniatura
-- Melhor tipografia
-
-**Tab chat (linha ~318-369)**
-- Ajustar typing indicator para usar `animate-wave-dot` (consistente com widget real)
-
-### 3. `src/index.css`
-
-Adicionar keyframes:
-- `confetti-fall`: 4 particulas com rotacao e queda (CSS puro, sem lib)
-- `ellipsis`: animacao de "..." para texto de waiting
-- `pulse-ring`: circulos concentricos que expandem e desaparecem
-
-## Regras
-
-- Nenhum texto/label do CSAT sera alterado
-- Nenhuma mudanca de logica, estado ou fluxo
-- Apenas visual/CSS
-- `primaryColor` usado em vez de cores hardcoded (blue/amber)
+-- Deletar visitors duplicados (sem rooms restantes)
+DELETE FROM chat_visitors
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id, company_contact_id,
+      ROW_NUMBER() OVER (PARTITION BY company_contact_id ORDER BY created_at ASC) as rn
+    FROM chat_visitors WHERE company_contact_id IS NOT NULL
+  ) sub WHERE rn > 1
+);
+```
 
 ## Arquivos Modificados
 
-| Arquivo | Tipo de Alteracao |
-|---------|-------------------|
-| `src/pages/ChatWidget.tsx` | Redesign visual: waiting, outside_hours, all_busy, csat (visual only), closed |
-| `src/components/chat/WidgetPreview.tsx` | Espelhar novo design em todas as tabs |
-| `src/index.css` | Adicionar keyframes: confetti-fall, ellipsis, pulse-ring |
+| Arquivo | Alteracao |
+|---------|-----------|
+| `supabase/functions/resolve-chat-visitor/index.ts` | Adicionar `.order("created_at").limit(1)` no lookup de visitor |
+| Nova migration SQL | Consolidar visitors duplicados e mover rooms |
+
+## Impacto
+
+- Corrige o historico para todos os clientes afetados (nao so Sukita Loco)
+- Previne criacao de novos duplicados
+- Sem mudanca no widget frontend — o problema e 100% backend
 
