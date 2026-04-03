@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
-// ── Supabase mock (no top-level variable references) ──────────────────
+// Proxy-based chainable mock
 function createChainProxy(): any {
   const handler: ProxyHandler<any> = {
     get(_target, prop) {
@@ -25,7 +25,6 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
-// ── TenantRealtime mock ───────────────────────────────────────────────
 let capturedAttendantCb: ((p: any) => void) | null = null;
 let capturedRoomStatusCb: ((p: any, src: string) => void) | null = null;
 
@@ -47,15 +46,8 @@ vi.mock("@/contexts/TenantRealtimeContext", () => ({
 import { useAttendantQueues } from "../useChatRealtime";
 
 describe("useAttendantQueues (Fix 1.1)", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    capturedAttendantCb = null;
-    capturedRoomStatusCb = null;
-  });
-
   afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("uses 120s safety net interval, not 10s", () => {
@@ -69,17 +61,14 @@ describe("useAttendantQueues (Fix 1.1)", () => {
     expect(has10s).toBe(false);
     expect(has120s).toBe(true);
 
-    setIntervalSpy.mockRestore();
     unmount();
   });
 
-  it("inline updates attendant via onAttendantUpdate without extra DB calls", async () => {
-    const { supabase } = await import("@/integrations/supabase/client");
+  it("inline updates attendant state without extra DB calls", () => {
+    const { supabase } = require("@/integrations/supabase/client");
     const { unmount } = renderHook(() => useAttendantQueues("tenant-1"));
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-
-    const callCountBefore = (supabase.from as any).mock.calls.length;
+    const callCountBefore = supabase.from.mock.calls.length;
 
     act(() => {
       capturedAttendantCb?.({
@@ -90,58 +79,50 @@ describe("useAttendantQueues (Fix 1.1)", () => {
       });
     });
 
-    const callCountAfter = (supabase.from as any).mock.calls.length;
-    expect(callCountAfter).toBe(callCountBefore);
+    // No new DB calls — inline update only
+    expect(supabase.from.mock.calls.length).toBe(callCountBefore);
+    unmount();
+  });
+
+  it("removes room from unassigned when attendant_id is assigned", () => {
+    const { result, unmount } = renderHook(() => useAttendantQueues("tenant-1"));
+
+    act(() => {
+      capturedRoomStatusCb?.({ room_id: "r1", status: "active", attendant_id: null, updated_at: "2026-01-01T00:00:01Z" }, "pg");
+    });
+    expect(result.current.unassignedRooms.some((r) => r.id === "r1")).toBe(true);
+
+    act(() => {
+      capturedRoomStatusCb?.({ room_id: "r1", status: "active", attendant_id: "att-1", updated_at: "2026-01-01T00:00:02Z" }, "pg");
+    });
+    expect(result.current.unassignedRooms.find((r) => r.id === "r1")).toBeUndefined();
 
     unmount();
   });
 
-  it("removes room from unassigned when attendant_id is assigned", async () => {
+  it("adds unassigned room on waiting with no attendant", () => {
     const { result, unmount } = renderHook(() => useAttendantQueues("tenant-1"));
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-
-    // Add unassigned room
     act(() => {
-      capturedRoomStatusCb?.({ room_id: "room-99", status: "active", attendant_id: null, updated_at: new Date().toISOString() }, "pg");
+      capturedRoomStatusCb?.({ room_id: "r2", status: "waiting", attendant_id: null, updated_at: "2026-01-01T00:00:03Z" }, "pg");
     });
 
-    // Assign it
-    act(() => {
-      capturedRoomStatusCb?.({ room_id: "room-99", status: "active", attendant_id: "att-1", updated_at: new Date().toISOString() }, "pg");
-    });
-
-    expect(result.current.unassignedRooms.find((r) => r.id === "room-99")).toBeUndefined();
+    expect(result.current.unassignedRooms.some((r) => r.id === "r2")).toBe(true);
     unmount();
   });
 
-  it("adds new unassigned room when waiting with no attendant", async () => {
+  it("removes room from unassigned on _deleted status", () => {
     const { result, unmount } = renderHook(() => useAttendantQueues("tenant-1"));
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-
     act(() => {
-      capturedRoomStatusCb?.({ room_id: "room-new", status: "waiting", attendant_id: null, updated_at: new Date().toISOString() }, "pg");
-    });
-
-    expect(result.current.unassignedRooms.some((r) => r.id === "room-new")).toBe(true);
-    unmount();
-  });
-
-  it("removes room from unassigned on _deleted status", async () => {
-    const { result, unmount } = renderHook(() => useAttendantQueues("tenant-1"));
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-
-    act(() => {
-      capturedRoomStatusCb?.({ room_id: "room-del", status: "waiting", attendant_id: null, updated_at: "2026-01-01T00:00:00Z" }, "pg");
+      capturedRoomStatusCb?.({ room_id: "r3", status: "waiting", attendant_id: null, updated_at: "2026-01-01T00:00:04Z" }, "pg");
     });
 
     act(() => {
-      capturedRoomStatusCb?.({ room_id: "room-del", status: "_deleted" }, "pg");
+      capturedRoomStatusCb?.({ room_id: "r3", status: "_deleted" }, "pg");
     });
 
-    expect(result.current.unassignedRooms.find((r) => r.id === "room-del")).toBeUndefined();
+    expect(result.current.unassignedRooms.find((r) => r.id === "r3")).toBeUndefined();
     unmount();
   });
 });
