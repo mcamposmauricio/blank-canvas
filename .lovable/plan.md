@@ -1,88 +1,26 @@
 
 
-# Plano: Corrigir Historico Nao Carregando no Widget (Visitors Duplicados)
+# Plano: Botao Deletar CSAT no Relatorio
 
-## Problema
+## Resumo
 
-O widget do "Sukita Loco" (e potencialmente qualquer cliente) nao carrega conversas anteriores porque a funcao `findOrCreateVisitor` cria visitantes duplicados para o mesmo `company_contact_id`.
+Adicionar botao de lixeira na coluna de acoes da tabela de resultados do relatorio CSAT (`AdminCSATReport.tsx`), visivel apenas para admin/master. Ao clicar, confirma e nullifica `csat_score` + `csat_comment` no `chat_rooms`, removendo o registro de todos os calculos.
 
-**Dados concretos**: O `company_contact_id` `15ba4b66...` (Administrador Kev) tem **10 registros de visitor** no banco. O visitor original (`c6499438`) tem 45 salas, mas os visitors mais recentes tem 0. Quando o widget abre, usa o token do visitor mais novo (sem salas), logo o historico aparece vazio.
+## Mudancas em `src/pages/AdminCSATReport.tsx`
 
-**Causa raiz**: A funcao `findOrCreateVisitor` na edge function `resolve-chat-visitor` usa `.maybeSingle()` para buscar visitor por `company_contact_id`. Quando existem duplicatas (criadas por race condition — 2 chamadas paralelas no mesmo segundo), `.maybeSingle()` retorna `null` (Supabase retorna erro quando ha mais de 1 resultado), fazendo a funcao criar MAIS um visitor. Isso piora o problema progressivamente.
+1. **Imports**: Adicionar `Trash2` do lucide, `useAuth` do contexto, `toast` do sonner
+2. **Estado**: Adicionar `deletingId: string | null` para loading state
+3. **Funcao `handleDeleteCsat(roomId)`**:
+   - `window.confirm("Tem certeza que deseja excluir esta avaliacao CSAT?")`
+   - `supabase.from("chat_rooms").update({ csat_score: null, csat_comment: null }).eq("id", roomId)`
+   - Toast de sucesso/erro
+   - Chama `refetch()` do hook (ja retornado por `useCSATReport`)
+4. **Coluna de acoes (linha ~354)**: Ao lado do botao "Ver chat", adicionar botao com `Trash2`, cor vermelha no hover, visivel apenas se `isAdmin || isMaster`
+5. **Hook `useCSATReport`**: Expor `refetch` (ja expoe como `refetch: fetchData`)
 
-## Solucao (2 partes)
+## Nenhum outro arquivo modificado
 
-### 1. Edge Function: Trocar `.maybeSingle()` por `.limit(1).single()` + consolidar
-
-**`supabase/functions/resolve-chat-visitor/index.ts`** — funcao `findOrCreateVisitor`:
-
-- Substituir a query de lookup por `.order("created_at", { ascending: true }).limit(1)` para sempre retornar o visitor mais antigo (que tem mais historico)
-- Adicionar `UNIQUE` constraint nao e viavel (ja existem duplicatas), entao a solucao e tolerante a duplicatas
-
-Mudanca especifica:
-```text
-// ANTES (linha 432-436):
-.eq("company_contact_id", companyContactId)
-.maybeSingle();
-
-// DEPOIS:
-.eq("company_contact_id", companyContactId)
-.order("created_at", { ascending: true })
-.limit(1)
-.maybeSingle();
-```
-
-Isso garante que mesmo com duplicatas, sempre retorna o visitor mais antigo (que contem o historico real).
-
-### 2. Migration: Consolidar visitors duplicados existentes
-
-Criar uma migration SQL que:
-- Identifica visitors duplicados por `company_contact_id`
-- Para cada grupo, mantém o mais antigo (que tem mais rooms)
-- Move todas as `chat_rooms` dos duplicados para o visitor primario (`UPDATE chat_rooms SET visitor_id = primary WHERE visitor_id IN (duplicates)`)
-- Deleta os visitors orfaos
-
-```sql
--- Mover rooms de visitors duplicados para o primario (mais antigo)
-WITH ranked AS (
-  SELECT id, company_contact_id,
-    ROW_NUMBER() OVER (PARTITION BY company_contact_id ORDER BY created_at ASC) as rn
-  FROM chat_visitors
-  WHERE company_contact_id IS NOT NULL
-),
-primaries AS (
-  SELECT id as primary_id, company_contact_id FROM ranked WHERE rn = 1
-),
-duplicates AS (
-  SELECT r.id as dup_id, p.primary_id
-  FROM ranked r
-  JOIN primaries p ON p.company_contact_id = r.company_contact_id
-  WHERE r.rn > 1
-)
-UPDATE chat_rooms SET visitor_id = d.primary_id
-FROM duplicates d WHERE chat_rooms.visitor_id = d.dup_id;
-
--- Deletar visitors duplicados (sem rooms restantes)
-DELETE FROM chat_visitors
-WHERE id IN (
-  SELECT id FROM (
-    SELECT id, company_contact_id,
-      ROW_NUMBER() OVER (PARTITION BY company_contact_id ORDER BY created_at ASC) as rn
-    FROM chat_visitors WHERE company_contact_id IS NOT NULL
-  ) sub WHERE rn > 1
-);
-```
-
-## Arquivos Modificados
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `supabase/functions/resolve-chat-visitor/index.ts` | Adicionar `.order("created_at").limit(1)` no lookup de visitor |
-| Nova migration SQL | Consolidar visitors duplicados e mover rooms |
-
-## Impacto
-
-- Corrige o historico para todos os clientes afetados (nao so Sukita Loco)
-- Previne criacao de novos duplicados
-- Sem mudanca no widget frontend — o problema e 100% backend
+- Nenhuma migration — `csat_score` ja e nullable
+- Nenhuma mudanca no hook — ja filtra `.not("csat_score", "is", null)`
+- RLS existente permite UPDATE para membros do tenant
 
