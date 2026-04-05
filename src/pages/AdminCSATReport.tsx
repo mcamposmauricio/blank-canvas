@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
-import { Star, ThumbsUp, ThumbsDown, BarChart3, Download, MessageSquare, ChevronLeft, ChevronRight, X, MessageCircle, CheckCircle, Percent, Trophy, Medal, Clock, Reply } from "lucide-react";
+import { Star, ThumbsUp, ThumbsDown, BarChart3, Download, MessageSquare, ChevronLeft, ChevronRight, X, MessageCircle, CheckCircle, Percent, Trophy, Medal, Clock, Reply, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
