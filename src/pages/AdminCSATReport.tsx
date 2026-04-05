@@ -35,7 +35,8 @@ const AdminCSATReport = () => {
     sortBy: "date", sortDir: "desc", page: 0,
   });
 
-  const { records, stats, totalCount, loading, pageSize } = useCSATReport(filters);
+  const { records, stats, totalCount, loading, pageSize, refetch } = useCSATReport(filters);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [attendantOptions, setAttendantOptions] = useState<{ id: string; name: string }[]>([]);
   const [teamOptions, setTeamOptions] = useState<{ id: string; name: string }[]>([]);
   const [tagOptions, setTagOptions] = useState<{ id: string; name: string }[]>([]);
