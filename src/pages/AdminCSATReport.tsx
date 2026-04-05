@@ -369,9 +369,21 @@ const AdminCSATReport = () => {
                               </TableCell>
                               <TableCell className="text-[13px] whitespace-nowrap tabular-nums">{new Date(record.closedAt).toLocaleDateString("pt-BR")}</TableCell>
                               <TableCell className="text-center">
-                                <Button size="sm" variant="ghost" className="h-7 text-[11px] gap-1" onClick={() => setReadOnlyRoom({ id: record.roomId, name: record.visitorName })}>
-                                  <MessageSquare className="h-3 w-3" />{t("csat.report.view_chat")}
-                                </Button>
+                                <div className="flex items-center justify-center gap-1">
+                                  <Button size="sm" variant="ghost" className="h-7 text-[11px] gap-1" onClick={() => setReadOnlyRoom({ id: record.roomId, name: record.visitorName })}>
+                                    <MessageSquare className="h-3 w-3" />{t("csat.report.view_chat")}
+                                  </Button>
+                                  {(isAdmin || isMaster) && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" disabled={deletingId === record.roomId} onClick={() => handleDeleteCsat(record.roomId)}>
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Excluir avaliação CSAT</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
