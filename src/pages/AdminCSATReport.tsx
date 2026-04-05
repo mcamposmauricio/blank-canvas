@@ -94,6 +94,19 @@ const AdminCSATReport = () => {
     const link = document.createElement("a"); link.href = url; link.download = `csat-report-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url);
   };
 
+  const handleDeleteCsat = async (roomId: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir esta avaliação CSAT? Ela será removida dos relatórios.")) return;
+    setDeletingId(roomId);
+    const { error } = await supabase.from("chat_rooms").update({ csat_score: null, csat_comment: null }).eq("id", roomId);
+    setDeletingId(null);
+    if (error) {
+      toast.error("Erro ao excluir avaliação CSAT");
+    } else {
+      toast.success("Avaliação CSAT excluída com sucesso");
+      refetch();
+    }
+  };
+
   return (
     <>
       <div className="space-y-6">
