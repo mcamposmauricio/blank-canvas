@@ -26,6 +26,7 @@ const fmt = (d: Date) => format(d, "yyyy-MM-dd");
 
 const AdminCSATReport = () => {
   const { t } = useLanguage();
+  const { isAdmin, isMaster } = useAuth();
 
   const [filters, setFilters] = useState<CSATReportFilters>({
     period: "month", scores: [], attendantIds: [], teamIds: [], tagIds: [],
