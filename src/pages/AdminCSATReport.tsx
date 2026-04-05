@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
-import { Star, ThumbsUp, ThumbsDown, BarChart3, Download, MessageSquare, ChevronLeft, ChevronRight, X, MessageCircle, CheckCircle, Percent, Trophy, Medal, Clock, Reply } from "lucide-react";
+import { Star, ThumbsUp, ThumbsDown, BarChart3, Download, MessageSquare, ChevronLeft, ChevronRight, X, MessageCircle, CheckCircle, Percent, Trophy, Medal, Clock, Reply, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ const fmt = (d: Date) => format(d, "yyyy-MM-dd");
 
 const AdminCSATReport = () => {
   const { t } = useLanguage();
+  const { isAdmin, isMaster } = useAuth();
 
   const [filters, setFilters] = useState<CSATReportFilters>({
     period: "month", scores: [], attendantIds: [], teamIds: [], tagIds: [],
@@ -32,7 +35,8 @@ const AdminCSATReport = () => {
     sortBy: "date", sortDir: "desc", page: 0,
   });
 
-  const { records, stats, totalCount, loading, pageSize } = useCSATReport(filters);
+  const { records, stats, totalCount, loading, pageSize, refetch } = useCSATReport(filters);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [attendantOptions, setAttendantOptions] = useState<{ id: string; name: string }[]>([]);
   const [teamOptions, setTeamOptions] = useState<{ id: string; name: string }[]>([]);
   const [tagOptions, setTagOptions] = useState<{ id: string; name: string }[]>([]);
@@ -88,6 +92,19 @@ const AdminCSATReport = () => {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a"); link.href = url; link.download = `csat-report-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url);
+  };
+
+  const handleDeleteCsat = async (roomId: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir esta avaliação CSAT? Ela será removida dos relatórios.")) return;
+    setDeletingId(roomId);
+    const { error } = await supabase.from("chat_rooms").update({ csat_score: null, csat_comment: null }).eq("id", roomId);
+    setDeletingId(null);
+    if (error) {
+      toast.error("Erro ao excluir avaliação CSAT");
+    } else {
+      toast.success("Avaliação CSAT excluída com sucesso");
+      refetch();
+    }
   };
 
   return (
@@ -352,9 +369,21 @@ const AdminCSATReport = () => {
                               </TableCell>
                               <TableCell className="text-[13px] whitespace-nowrap tabular-nums">{new Date(record.closedAt).toLocaleDateString("pt-BR")}</TableCell>
                               <TableCell className="text-center">
-                                <Button size="sm" variant="ghost" className="h-7 text-[11px] gap-1" onClick={() => setReadOnlyRoom({ id: record.roomId, name: record.visitorName })}>
-                                  <MessageSquare className="h-3 w-3" />{t("csat.report.view_chat")}
-                                </Button>
+                                <div className="flex items-center justify-center gap-1">
+                                  <Button size="sm" variant="ghost" className="h-7 text-[11px] gap-1" onClick={() => setReadOnlyRoom({ id: record.roomId, name: record.visitorName })}>
+                                    <MessageSquare className="h-3 w-3" />{t("csat.report.view_chat")}
+                                  </Button>
+                                  {(isAdmin || isMaster) && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" disabled={deletingId === record.roomId} onClick={() => handleDeleteCsat(record.roomId)}>
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Excluir avaliação CSAT</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
