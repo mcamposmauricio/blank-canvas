@@ -1,26 +1,53 @@
 
 
-# Plano: Botao Deletar CSAT no Relatorio
+# Plano: Advisory Lock no Trigger de Resync
 
 ## Resumo
 
-Adicionar botao de lixeira na coluna de acoes da tabela de resultados do relatorio CSAT (`AdminCSATReport.tsx`), visivel apenas para admin/master. Ao clicar, confirma e nullifica `csat_score` + `csat_comment` no `chat_rooms`, removendo o registro de todos os calculos.
+Adicionar `pg_advisory_xact_lock` na funcao `resync_attendant_counter_on_room_change` para serializar COUNTs concorrentes do mesmo atendente, eliminando a race condition que causa contagens erradas.
 
-## Mudancas em `src/pages/AdminCSATReport.tsx`
+## Mudanca unica: nova migration SQL
 
-1. **Imports**: Adicionar `Trash2` do lucide, `useAuth` do contexto, `toast` do sonner
-2. **Estado**: Adicionar `deletingId: string | null` para loading state
-3. **Funcao `handleDeleteCsat(roomId)`**:
-   - `window.confirm("Tem certeza que deseja excluir esta avaliacao CSAT?")`
-   - `supabase.from("chat_rooms").update({ csat_score: null, csat_comment: null }).eq("id", roomId)`
-   - Toast de sucesso/erro
-   - Chama `refetch()` do hook (ja retornado por `useCSATReport`)
-4. **Coluna de acoes (linha ~354)**: Ao lado do botao "Ver chat", adicionar botao com `Trash2`, cor vermelha no hover, visivel apenas se `isAdmin || isMaster`
-5. **Hook `useCSATReport`**: Expor `refetch` (ja expoe como `refetch: fetchData`)
+Alterar a funcao existente para adicionar advisory lock antes de cada COUNT:
 
-## Nenhum outro arquivo modificado
+```sql
+CREATE OR REPLACE FUNCTION public.resync_attendant_counter_on_room_change()
+  RETURNS trigger ...
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.attendant_id IS NOT NULL AND OLD.status IN ('active', 'waiting') THEN
+      PERFORM pg_advisory_xact_lock(hashtext(OLD.attendant_id::text));
+      UPDATE ... SET active_conversations = (SELECT COUNT(*) ...) ...
+    END IF;
+    RETURN OLD;
+  END IF;
 
-- Nenhuma migration — `csat_score` ja e nullable
-- Nenhuma mudanca no hook — ja filtra `.not("csat_score", "is", null)`
-- RLS existente permite UPDATE para membros do tenant
+  IF TG_OP = 'UPDATE' AND OLD.attendant_id IS NOT NULL THEN
+    PERFORM pg_advisory_xact_lock(hashtext(OLD.attendant_id::text));
+    UPDATE ... SET active_conversations = (SELECT COUNT(*) ...) ...
+  END IF;
+
+  IF NEW.attendant_id IS NOT NULL AND (...) THEN
+    PERFORM pg_advisory_xact_lock(hashtext(NEW.attendant_id::text));
+    UPDATE ... SET active_conversations = (SELECT COUNT(*) ...) ...
+  END IF;
+
+  RETURN NEW;
+END;
+$$
+```
+
+## Impacto
+
+- Zero custo em operacao normal (lock instantaneo sem concorrencia)
+- Serializa apenas quando dois triggers rodam para o mesmo atendente simultaneamente
+- Sem tabelas, colunas ou indices novos
+- Nenhum arquivo frontend modificado
+
+## Arquivos
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| Nova migration SQL | `pg_advisory_xact_lock` no `resync_attendant_counter_on_room_change` |
 
