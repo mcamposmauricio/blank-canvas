@@ -154,7 +154,7 @@ const TeamSettingsTab = () => {
     const link = `${window.location.origin}/auth?invite=${newToken}`;
     navigator.clipboard.writeText(link);
     toast({ title: t("team.linkRegenerated") });
-    fetchProfiles();
+    loadData();
   };
 
   const handleEditPermissions = (profile: UserProfile) => {
