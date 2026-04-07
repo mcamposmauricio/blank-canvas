@@ -343,13 +343,24 @@ const TeamSettingsTab = () => {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {profile.invite_status === "pending" && profile.invite_token && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCopyInviteLink(profile.invite_token!)}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopyInviteLink(profile.invite_token!)}
+                          title={t("team.linkCopied")}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRegenerateInvite(profile.id)}
+                          title={t("team.regenerateLink")}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                     {profile.user_id && (
                       <Button
