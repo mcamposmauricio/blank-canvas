@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { ShieldCheck, Pencil, Copy, UserPlus, Mail, Phone, Building2, Loader2, Clock, Camera } from "lucide-react";
+import { ShieldCheck, Pencil, Copy, UserPlus, Mail, Phone, Building2, Loader2, Clock, Camera, RefreshCw } from "lucide-react";
 import UserPermissionsDialog from "@/components/UserPermissionsDialog";
 
 const SPECIALTIES = ["implementacao", "onboarding", "acompanhamento", "churn"];
@@ -139,6 +139,22 @@ const TeamSettingsTab = () => {
     const link = `${window.location.origin}/auth?invite=${token}`;
     navigator.clipboard.writeText(link);
     toast({ title: t("team.linkCopied") });
+  };
+
+  const handleRegenerateInvite = async (profileId: string) => {
+    const newToken = crypto.randomUUID();
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ invite_token: newToken, invite_status: "pending" } as any)
+      .eq("id", profileId);
+    if (error) {
+      toast({ title: t("team.inviteError"), variant: "destructive" });
+      return;
+    }
+    const link = `${window.location.origin}/auth?invite=${newToken}`;
+    navigator.clipboard.writeText(link);
+    toast({ title: t("team.linkRegenerated") });
+    loadData();
   };
 
   const handleEditPermissions = (profile: UserProfile) => {
@@ -327,13 +343,24 @@ const TeamSettingsTab = () => {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {profile.invite_status === "pending" && profile.invite_token && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCopyInviteLink(profile.invite_token!)}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopyInviteLink(profile.invite_token!)}
+                          title={t("team.linkCopied")}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRegenerateInvite(profile.id)}
+                          title={t("team.regenerateLink")}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                     {profile.user_id && (
                       <Button

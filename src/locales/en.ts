@@ -920,6 +920,8 @@ export default {
   "team.inviteSuccess": "Invite created successfully!",
   "team.inviteLinkCopied": "Invite link copied to clipboard",
   "team.inviteError": "Error creating invite",
+  "team.regenerateLink": "Regenerate invite link",
+  "team.linkRegenerated": "New invite link generated and copied!",
   "team.sendInvite": "Send Invite",
   // Granular sub-permissions
   "team.submodule.cs.kanban": "Customer Kanban",
