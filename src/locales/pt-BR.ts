@@ -941,6 +941,8 @@ export default {
   "team.inviteSuccess": "Convite criado com sucesso!",
   "team.inviteLinkCopied": "Link de convite copiado para a área de transferência",
   "team.inviteError": "Erro ao criar convite",
+  "team.regenerateLink": "Regenerar link de convite",
+  "team.linkRegenerated": "Novo link de convite gerado e copiado!",
   "team.sendInvite": "Enviar Convite",
   // Granular sub-permissions
   "team.submodule.cs.kanban": "Kanban de Clientes",
