@@ -1,53 +1,44 @@
 
 
-# Plano: Advisory Lock no Trigger de Resync
+# Plano: Corrigir Build Error + Regenerar Link de Convite
 
-## Resumo
+## Parte 1 — Fix build error em AutoMessagesTab.tsx
 
-Adicionar `pg_advisory_xact_lock` na funcao `resync_attendant_counter_on_room_change` para serializar COUNTs concorrentes do mesmo atendente, eliminando a race condition que causa contagens erradas.
+O erro ocorre porque `Record<string, any>` nao e aceito pelo tipo estrito do Supabase. Solucao: tipar o objeto `updates` explicitamente com os campos da tabela.
 
-## Mudanca unica: nova migration SQL
-
-Alterar a funcao existente para adicionar advisory lock antes de cada COUNT:
-
-```sql
-CREATE OR REPLACE FUNCTION public.resync_attendant_counter_on_room_change()
-  RETURNS trigger ...
-AS $$
-BEGIN
-  IF TG_OP = 'DELETE' THEN
-    IF OLD.attendant_id IS NOT NULL AND OLD.status IN ('active', 'waiting') THEN
-      PERFORM pg_advisory_xact_lock(hashtext(OLD.attendant_id::text));
-      UPDATE ... SET active_conversations = (SELECT COUNT(*) ...) ...
-    END IF;
-    RETURN OLD;
-  END IF;
-
-  IF TG_OP = 'UPDATE' AND OLD.attendant_id IS NOT NULL THEN
-    PERFORM pg_advisory_xact_lock(hashtext(OLD.attendant_id::text));
-    UPDATE ... SET active_conversations = (SELECT COUNT(*) ...) ...
-  END IF;
-
-  IF NEW.attendant_id IS NOT NULL AND (...) THEN
-    PERFORM pg_advisory_xact_lock(hashtext(NEW.attendant_id::text));
-    UPDATE ... SET active_conversations = (SELECT COUNT(*) ...) ...
-  END IF;
-
-  RETURN NEW;
-END;
-$$
+**Arquivo**: `src/components/chat/AutoMessagesTab.tsx`
+- Linhas 143 e 163: trocar `Record<string, any>` por um tipo inline com os campos opcionais da tabela:
+```ts
+const updates: { message_content?: string; trigger_minutes?: number; close_resolution_status?: string } = {};
 ```
 
-## Impacto
+## Parte 2 — Regenerar link de convite no TeamSettingsTab
 
-- Zero custo em operacao normal (lock instantaneo sem concorrencia)
-- Serializa apenas quando dois triggers rodam para o mesmo atendente simultaneamente
-- Sem tabelas, colunas ou indices novos
-- Nenhum arquivo frontend modificado
+O convite do Gustavo esta com status "pending" mas o token UUID provavelmente nao tem expiracao no banco (nao existe coluna `expires_at`). O problema e que o link aparece como "expirado" na UI do Auth.tsx porque a query nao encontra o registro — possivelmente o `invite_status` ja foi alterado ou o token nao bate.
 
-## Arquivos
+**Solucao**: adicionar botao "Regenerar link" ao lado do botao de copiar, visivel para convites pendentes.
+
+**Arquivo**: `src/components/TeamSettingsTab.tsx`
+
+1. Adicionar funcao `handleRegenerateInvite(profileId)`:
+   - Gera novo UUID via `crypto.randomUUID()`
+   - Faz `UPDATE user_profiles SET invite_token = newToken, invite_status = 'pending' WHERE id = profileId`
+   - Copia novo link para clipboard
+   - Recarrega dados
+
+2. Na area de botoes (linha ~329), ao lado do botao Copy, adicionar botao com icone `RefreshCw` que chama `handleRegenerateInvite`
+
+3. Adicionar traducoes:
+   - `team.regenerateLink` / `team.linkRegenerated` em pt-BR e en
+
+**Nenhuma migration necessaria** — o campo `invite_token` ja aceita qualquer texto e a atualizacao e feita via RLS existente (tenant members podem atualizar).
+
+## Arquivos modificados
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| Nova migration SQL | `pg_advisory_xact_lock` no `resync_attendant_counter_on_room_change` |
+| `src/components/chat/AutoMessagesTab.tsx` | Tipar `updates` para fix build |
+| `src/components/TeamSettingsTab.tsx` | Botao regenerar link + handler |
+| `src/locales/pt-BR.ts` | Traducoes regenerate |
+| `src/locales/en.ts` | Traducoes regenerate |
 
