@@ -141,6 +141,22 @@ const TeamSettingsTab = () => {
     toast({ title: t("team.linkCopied") });
   };
 
+  const handleRegenerateInvite = async (profileId: string) => {
+    const newToken = crypto.randomUUID();
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ invite_token: newToken, invite_status: "pending" } as any)
+      .eq("id", profileId);
+    if (error) {
+      toast({ title: t("team.inviteError"), variant: "destructive" });
+      return;
+    }
+    const link = `${window.location.origin}/auth?invite=${newToken}`;
+    navigator.clipboard.writeText(link);
+    toast({ title: t("team.linkRegenerated") });
+    fetchProfiles();
+  };
+
   const handleEditPermissions = (profile: UserProfile) => {
     setSelectedProfile(profile);
     setPermDialogOpen(true);
