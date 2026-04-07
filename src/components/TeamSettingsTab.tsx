@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { ShieldCheck, Pencil, Copy, UserPlus, Mail, Phone, Building2, Loader2, Clock, Camera } from "lucide-react";
+import { ShieldCheck, Pencil, Copy, UserPlus, Mail, Phone, Building2, Loader2, Clock, Camera, RefreshCw } from "lucide-react";
 import UserPermissionsDialog from "@/components/UserPermissionsDialog";
 
 const SPECIALTIES = ["implementacao", "onboarding", "acompanhamento", "churn"];

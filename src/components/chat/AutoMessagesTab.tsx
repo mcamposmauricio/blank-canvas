@@ -160,7 +160,7 @@ const AutoMessagesTab = () => {
     setSavingAll(true);
     const editEntries = Object.entries(localEdits);
     for (const [ruleId, edits] of editEntries) {
-      const updates: Record<string, any> = {};
+      const updates: { message_content?: string; trigger_minutes?: number; close_resolution_status?: string } = {};
       if (edits.message_content !== undefined) updates.message_content = edits.message_content;
       if (edits.trigger_minutes !== undefined) updates.trigger_minutes = Math.max(5, edits.trigger_minutes ?? 5);
       if (edits.close_resolution_status !== undefined) updates.close_resolution_status = edits.close_resolution_status;
