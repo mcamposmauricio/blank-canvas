@@ -1,44 +1,28 @@
 
 
-# Plano: Corrigir Build Error + Regenerar Link de Convite
+# Corrigir sala travada em `waiting` para cliente Maria Do Socorro
 
-## Parte 1 — Fix build error em AutoMessagesTab.tsx
+## Problema
+A sala `47e10e35-5815-4997-851f-4bf880810ebb` esta presa no status `waiting` desde 9 de abril, sem atendente atribuido. Isso bloqueia a visitante de abrir novos chats.
 
-O erro ocorre porque `Record<string, any>` nao e aceito pelo tipo estrito do Supabase. Solucao: tipar o objeto `updates` explicitamente com os campos da tabela.
+## Solucao
+Migration SQL para fechar a sala travada com `resolution_status = 'archived'` (nao foi atendida).
 
-**Arquivo**: `src/components/chat/AutoMessagesTab.tsx`
-- Linhas 143 e 163: trocar `Record<string, any>` por um tipo inline com os campos opcionais da tabela:
-```ts
-const updates: { message_content?: string; trigger_minutes?: number; close_resolution_status?: string } = {};
+```sql
+UPDATE public.chat_rooms
+SET status = 'closed',
+    closed_at = now(),
+    resolution_status = 'archived',
+    updated_at = now()
+WHERE id = '47e10e35-5815-4997-851f-4bf880810ebb'
+  AND status = 'waiting';
 ```
 
-## Parte 2 — Regenerar link de convite no TeamSettingsTab
+## Resultado
+- A cliente Maria Do Socorro podera abrir um novo chat normalmente
+- A sala fechada ficara no historico com status `archived`
+- Nenhum dado e perdido
 
-O convite do Gustavo esta com status "pending" mas o token UUID provavelmente nao tem expiracao no banco (nao existe coluna `expires_at`). O problema e que o link aparece como "expirado" na UI do Auth.tsx porque a query nao encontra o registro — possivelmente o `invite_status` ja foi alterado ou o token nao bate.
-
-**Solucao**: adicionar botao "Regenerar link" ao lado do botao de copiar, visivel para convites pendentes.
-
-**Arquivo**: `src/components/TeamSettingsTab.tsx`
-
-1. Adicionar funcao `handleRegenerateInvite(profileId)`:
-   - Gera novo UUID via `crypto.randomUUID()`
-   - Faz `UPDATE user_profiles SET invite_token = newToken, invite_status = 'pending' WHERE id = profileId`
-   - Copia novo link para clipboard
-   - Recarrega dados
-
-2. Na area de botoes (linha ~329), ao lado do botao Copy, adicionar botao com icone `RefreshCw` que chama `handleRegenerateInvite`
-
-3. Adicionar traducoes:
-   - `team.regenerateLink` / `team.linkRegenerated` em pt-BR e en
-
-**Nenhuma migration necessaria** — o campo `invite_token` ja aceita qualquer texto e a atualizacao e feita via RLS existente (tenant members podem atualizar).
-
-## Arquivos modificados
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/components/chat/AutoMessagesTab.tsx` | Tipar `updates` para fix build |
-| `src/components/TeamSettingsTab.tsx` | Botao regenerar link + handler |
-| `src/locales/pt-BR.ts` | Traducoes regenerate |
-| `src/locales/en.ts` | Traducoes regenerate |
+## Investigacao adicional recomendada
+A sala ficou 5 dias sem atribuicao. Possivel causa: nenhum atendente online/elegivel quando ela entrou, e nenhuma regra de auto-close cobriu o caso. Isso pode indicar que a regra de inatividade precisa ser ajustada para cobrir salas em `waiting` sem atendente.
 
