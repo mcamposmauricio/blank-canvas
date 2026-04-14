@@ -1,12 +1,14 @@
 
 
-# Corrigir sala travada em `waiting` para cliente Maria Do Socorro
+# Fechar TODAS as salas travadas em `waiting` sem atendente
 
 ## Problema
-A sala `47e10e35-5815-4997-851f-4bf880810ebb` esta presa no status `waiting` desde 9 de abril, sem atendente atribuido. Isso bloqueia a visitante de abrir novos chats.
+Existem **65 salas** presas em `waiting` com `attendant_id IS NULL`, algumas desde 17 de marco. Todas bloqueiam os respectivos visitantes de abrir novos chats.
+
+A sala especifica do external_id `8A5CEFC0DA2F46E6A34325B9BA538319` e a `1f37e0af-3bfe-409d-bffa-91655e3185b8` (Administrador Cafe Parambu Ltda).
 
 ## Solucao
-Migration SQL para fechar a sala travada com `resolution_status = 'archived'` (nao foi atendida).
+Uma unica migration SQL que fecha todas as 65 salas de uma vez:
 
 ```sql
 UPDATE public.chat_rooms
@@ -14,15 +16,16 @@ SET status = 'closed',
     closed_at = now(),
     resolution_status = 'archived',
     updated_at = now()
-WHERE id = '47e10e35-5815-4997-851f-4bf880810ebb'
-  AND status = 'waiting';
+WHERE status = 'waiting'
+  AND attendant_id IS NULL;
 ```
 
 ## Resultado
-- A cliente Maria Do Socorro podera abrir um novo chat normalmente
-- A sala fechada ficara no historico com status `archived`
-- Nenhum dado e perdido
+- Todas as 65 salas travadas serao fechadas com status `archived`
+- Todos os visitantes afetados poderao abrir novos chats normalmente
+- Nenhum dado e perdido — as salas ficam no historico
+- A sala da Maria Do Socorro ja foi corrigida na migration anterior; esta cobre todas as restantes
 
-## Investigacao adicional recomendada
-A sala ficou 5 dias sem atribuicao. Possivel causa: nenhum atendente online/elegivel quando ela entrou, e nenhuma regra de auto-close cobriu o caso. Isso pode indicar que a regra de inatividade precisa ser ajustada para cobrir salas em `waiting` sem atendente.
+## Investigacao recomendada (pos-fix)
+O dia 9 de abril concentra a maioria das salas travadas. Possivel causa: atendentes offline ou regra de auto-close que nao cobre salas em `waiting` sem atendente atribuido.
 
