@@ -1,31 +1,36 @@
 
+## Definição refinada de "tempo de espera"
 
-# Fechar TODAS as salas travadas em `waiting` sem atendente
+Vou recalcular o KPI de tempo de espera do tenant MarQ usando uma definição operacionalmente correta, que reflete apenas situações onde havia capacidade real de atendimento.
 
-## Problema
-Existem **65 salas** presas em `waiting` com `attendant_id IS NULL`, algumas desde 17 de marco. Todas bloqueiam os respectivos visitantes de abrir novos chats.
+### Regra: uma sala entra no cálculo de tempo de espera SOMENTE se
 
-A sala especifica do external_id `8A5CEFC0DA2F46E6A34325B9BA538319` e a `1f37e0af-3bfe-409d-bffa-91655e3185b8` (Administrador Cafe Parambu Ltda).
+1. **Foi efetivamente atribuída a um atendente** (`attendant_id IS NOT NULL` e `assigned_at IS NOT NULL`), OU
+2. **Está atualmente em `waiting` E havia pelo menos 1 atendente online no momento da criação da sala** (capacidade existente, fila legítima)
 
-## Solucao
-Uma unica migration SQL que fecha todas as 65 salas de uma vez:
+### Regra: uma sala é EXCLUÍDA do cálculo se
 
-```sql
-UPDATE public.chat_rooms
-SET status = 'closed',
-    closed_at = now(),
-    resolution_status = 'archived',
-    updated_at = now()
-WHERE status = 'waiting'
-  AND attendant_id IS NULL;
-```
+- Está/ficou em `waiting` sem atendente algum online no período (não é "espera", é "ausência de operação")
+- Foi arquivada sem atribuição (`resolution_status = 'archived'` e `attendant_id IS NULL`)
+- Foi criada fora do horário comercial configurado em `chat_business_hours` (sem capacidade prevista)
 
-## Resultado
-- Todas as 65 salas travadas serao fechadas com status `archived`
-- Todos os visitantes afetados poderao abrir novos chats normalmente
-- Nenhum dado e perdido — as salas ficam no historico
-- A sala da Maria Do Socorro ja foi corrigida na migration anterior; esta cobre todas as restantes
+### Métricas a entregar
 
-## Investigacao recomendada (pos-fix)
-O dia 9 de abril concentra a maioria das salas travadas. Possivel causa: atendentes offline ou regra de auto-close que nao cobre salas em `waiting` sem atendente atribuido.
+Para o tenant MarQ, nos últimos 28 dias:
 
+| Métrica | Como calcular |
+|---|---|
+| Tempo médio de espera (real) | `AVG(assigned_at - created_at)` apenas em salas atribuídas |
+| Mediana de espera (p50) | mais representativo que média |
+| p90 de espera | identifica cauda longa |
+| Volume considerado | nº de salas que entraram no cálculo |
+| Volume descartado | nº de salas excluídas + motivo (arquivadas, fora de horário, sem operação) |
+| Tempo médio de atendimento (real) | `AVG(closed_at - assigned_at)` em salas atribuídas e fechadas |
+| Taxa de atribuição | salas atribuídas / total de salas criadas |
+
+### Execução
+
+Apenas leituras SQL via Supabase (sem alteração de código). Resposta em chat com tabela markdown comparando o KPI antigo (média ingênua) vs. o novo (filtrado), explicando o que mudou e por quê.
+
+### Arquivos
+Nenhum. Operação read-only sobre o banco.
