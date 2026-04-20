@@ -193,16 +193,16 @@ export function useDashboardStats(filters: DashboardFilters, tenantId?: string |
     }
 
     const onlineAttendants = allAttendants.filter(a => a.status === "available" || a.status === "online").length;
+    const activeChats = snapshotRooms.filter(r => r.status === "active").length;
+    const waitingChats = snapshotRooms.filter(r => r.status === "waiting").length;
 
     if (rooms.length === 0) {
-      setStats({ ...EMPTY_STATS, onlineAttendants }); setLoading(false); return;
+      setStats({ ...EMPTY_STATS, onlineAttendants, activeChats, waitingChats }); setLoading(false); return;
     }
 
     const totalChats = rooms.length;
     const todayStr = now.toISOString().slice(0, 10);
     const chatsToday = rooms.filter(r => r.created_at?.slice(0, 10) === todayStr).length;
-    const activeChats = rooms.filter(r => r.status === "active").length;
-    const waitingChats = rooms.filter(r => r.status === "waiting").length;
 
     const withCsat = rooms.filter(r => r.csat_score != null);
     const avgCsat = withCsat.length > 0 ? Number((withCsat.reduce((s, r) => s + (r.csat_score ?? 0), 0) / withCsat.length).toFixed(1)) : null;
