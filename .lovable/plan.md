@@ -1,36 +1,35 @@
 
-## Definição refinada de "tempo de espera"
+## Problema
+Service Dashboard mostra 0 em tudo, mas existem 64 chats atribuídos a atendentes no momento. Os números não batem.
 
-Vou recalcular o KPI de tempo de espera do tenant MarQ usando uma definição operacionalmente correta, que reflete apenas situações onde havia capacidade real de atendimento.
+## Investigação necessária
+Preciso identificar qual é o "Service Dashboard" exato. Pelos arquivos do projeto, os candidatos são:
+- `src/pages/AdminDashboard.tsx`
+- `src/pages/AdminDashboardGerencial.tsx`
+- `src/components/backoffice/Operations.tsx` / `LiveTimeline.tsx`
+- `src/hooks/useDashboardStats.ts`
 
-### Regra: uma sala entra no cálculo de tempo de espera SOMENTE se
+Vou:
+1. Ler `useDashboardStats.ts` e os componentes de dashboard para entender as queries
+2. Rodar queries no banco para confirmar o estado real (64 atribuídos, distribuição por status, tenant)
+3. Identificar a causa raiz: filtro errado de `tenant_id` (impersonation), filtro de status (`status = 'active'` vs `attendant_id IS NOT NULL`), filtro de data (hoje vs período), ou RLS bloqueando
 
-1. **Foi efetivamente atribuída a um atendente** (`attendant_id IS NOT NULL` e `assigned_at IS NOT NULL`), OU
-2. **Está atualmente em `waiting` E havia pelo menos 1 atendente online no momento da criação da sala** (capacidade existente, fila legítima)
+## Hipóteses prováveis
+- **H1:** Dashboard filtra por `status = 'active'` mas as 64 salas estão em outro status (ex: `waiting` com atendente atribuído, ou status legado)
+- **H2:** Filtro de período (hoje, América/Sao_Paulo) está cortando salas atribuídas em dias anteriores que continuam abertas
+- **H3:** Filtro de tenant errado — dashboard não está enxergando o tenant correto (provável MarQ) por estar logado como master sem impersonação
+- **H4:** Query usa `attendant_profiles.active_conversations` (mantido por trigger) que está dessincronizado do estado real de `chat_rooms`
 
-### Regra: uma sala é EXCLUÍDA do cálculo se
+## Plano de execução
+1. Ler código dos dashboards e do hook `useDashboardStats`
+2. Rodar SQL para:
+   - Contar salas com `attendant_id IS NOT NULL` agrupadas por `status` e `tenant_id`
+   - Comparar `SUM(active_conversations)` de `attendant_profiles` vs contagem real em `chat_rooms`
+   - Verificar `closed_at IS NULL AND attendant_id IS NOT NULL` (definição operacional de "em atendimento agora")
+3. Apresentar diagnóstico em chat com:
+   - Causa raiz identificada
+   - Números reais por tenant/status
+   - Recomendação de correção (ajustar filtro do dashboard ou ressincronizar `active_conversations`)
 
-- Está/ficou em `waiting` sem atendente algum online no período (não é "espera", é "ausência de operação")
-- Foi arquivada sem atribuição (`resolution_status = 'archived'` e `attendant_id IS NULL`)
-- Foi criada fora do horário comercial configurado em `chat_business_hours` (sem capacidade prevista)
-
-### Métricas a entregar
-
-Para o tenant MarQ, nos últimos 28 dias:
-
-| Métrica | Como calcular |
-|---|---|
-| Tempo médio de espera (real) | `AVG(assigned_at - created_at)` apenas em salas atribuídas |
-| Mediana de espera (p50) | mais representativo que média |
-| p90 de espera | identifica cauda longa |
-| Volume considerado | nº de salas que entraram no cálculo |
-| Volume descartado | nº de salas excluídas + motivo (arquivadas, fora de horário, sem operação) |
-| Tempo médio de atendimento (real) | `AVG(closed_at - assigned_at)` em salas atribuídas e fechadas |
-| Taxa de atribuição | salas atribuídas / total de salas criadas |
-
-### Execução
-
-Apenas leituras SQL via Supabase (sem alteração de código). Resposta em chat com tabela markdown comparando o KPI antigo (média ingênua) vs. o novo (filtrado), explicando o que mudou e por quê.
-
-### Arquivos
-Nenhum. Operação read-only sobre o banco.
+## Saída
+Resposta em chat com diagnóstico — sem alteração de código nesta etapa. Se a causa for bug de query no frontend, abro um segundo plano para o fix.
