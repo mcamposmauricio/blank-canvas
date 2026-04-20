@@ -170,13 +170,23 @@ export function useDashboardStats(filters: DashboardFilters, tenantId?: string |
     if (tagRoomIds) query = query.in("id", tagRoomIds.slice(0, 500));
     if (searchVisitorIds) query = query.in("visitor_id", searchVisitorIds.slice(0, 500));
 
-    const [roomsRes, attendantsRes] = await Promise.all([
+    // Snapshot query: current open rooms regardless of period filter (for "now" KPIs)
+    let snapshotQuery = supabase
+      .from("chat_rooms")
+      .select("status, attendant_id", { count: "exact" })
+      .in("status", ["waiting", "active"]);
+    if (effectiveAttendantIds) snapshotQuery = snapshotQuery.in("attendant_id", effectiveAttendantIds);
+    if (tenantId) snapshotQuery = snapshotQuery.eq("tenant_id", tenantId);
+
+    const [roomsRes, attendantsRes, snapshotRes] = await Promise.all([
       query,
       supabase.from("attendant_profiles").select("id, display_name, status"),
+      snapshotQuery,
     ]);
 
     let rooms = roomsRes.data ?? [];
     const allAttendants = attendantsRes.data ?? [];
+    const snapshotRooms = snapshotRes.data ?? [];
 
     if (categoryContactIds !== null) {
       rooms = rooms.filter(r => r.contact_id && categoryContactIds!.includes(r.contact_id));
