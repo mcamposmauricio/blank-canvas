@@ -1,35 +1,22 @@
 
 ## Problema
-Service Dashboard mostra 0 em tudo, mas existem 64 chats atribuídos a atendentes no momento. Os números não batem.
+64 salas com `status='waiting'` + `attendant_id NOT NULL` (já atribuídas mas presas em waiting) não aparecem como "Na Fila" no dashboard nem como "Ativas".
 
-## Investigação necessária
-Preciso identificar qual é o "Service Dashboard" exato. Pelos arquivos do projeto, os candidatos são:
-- `src/pages/AdminDashboard.tsx`
-- `src/pages/AdminDashboardGerencial.tsx`
-- `src/components/backoffice/Operations.tsx` / `LiveTimeline.tsx`
-- `src/hooks/useDashboardStats.ts`
+## Causa raiz
+No `useDashboardStats.ts` (a confirmar), a contagem de "fila/waiting" provavelmente filtra `status='waiting' AND attendant_id IS NULL`. Como essas 64 têm atendente atribuído, caem no vácuo.
 
-Vou:
-1. Ler `useDashboardStats.ts` e os componentes de dashboard para entender as queries
-2. Rodar queries no banco para confirmar o estado real (64 atribuídos, distribuição por status, tenant)
-3. Identificar a causa raiz: filtro errado de `tenant_id` (impersonation), filtro de status (`status = 'active'` vs `attendant_id IS NOT NULL`), filtro de data (hoje vs período), ou RLS bloqueando
+## Correção mínima
+Alterar **uma única linha** da query/filtro de "salas na fila" no dashboard para considerar apenas `status='waiting'` (sem condicionar a `attendant_id`). Assim toda sala em waiting aparece na fila, independente de ter sido pré-atribuída.
 
-## Hipóteses prováveis
-- **H1:** Dashboard filtra por `status = 'active'` mas as 64 salas estão em outro status (ex: `waiting` com atendente atribuído, ou status legado)
-- **H2:** Filtro de período (hoje, América/Sao_Paulo) está cortando salas atribuídas em dias anteriores que continuam abertas
-- **H3:** Filtro de tenant errado — dashboard não está enxergando o tenant correto (provável MarQ) por estar logado como master sem impersonação
-- **H4:** Query usa `attendant_profiles.active_conversations` (mantido por trigger) que está dessincronizado do estado real de `chat_rooms`
+## Passos
+1. Ler `src/hooks/useDashboardStats.ts` e `src/pages/AdminDashboard.tsx` para localizar o filtro exato de "waiting/fila".
+2. Remover a condição `attendant_id IS NULL` (ou equivalente) do contador de fila.
+3. Sem outras mudanças: KPIs de "ativas", tempo de espera e demais permanecem iguais.
 
-## Plano de execução
-1. Ler código dos dashboards e do hook `useDashboardStats`
-2. Rodar SQL para:
-   - Contar salas com `attendant_id IS NOT NULL` agrupadas por `status` e `tenant_id`
-   - Comparar `SUM(active_conversations)` de `attendant_profiles` vs contagem real em `chat_rooms`
-   - Verificar `closed_at IS NULL AND attendant_id IS NOT NULL` (definição operacional de "em atendimento agora")
-3. Apresentar diagnóstico em chat com:
-   - Causa raiz identificada
-   - Números reais por tenant/status
-   - Recomendação de correção (ajustar filtro do dashboard ou ressincronizar `active_conversations`)
+## Fora de escopo
+- Não vou destravar as 64 salas (mudar status para active) — só corrigir a contagem.
+- Não vou alterar o `ChatRoomList` do workspace (já agrupa corretamente waiting vs active).
+- Não vou mexer em triggers nem trigger de assignment.
 
-## Saída
-Resposta em chat com diagnóstico — sem alteração de código nesta etapa. Se a causa for bug de query no frontend, abro um segundo plano para o fix.
+## Arquivo afetado
+- `src/hooks/useDashboardStats.ts` (provável; confirmar no momento da execução)
