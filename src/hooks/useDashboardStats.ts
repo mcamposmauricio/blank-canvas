@@ -170,29 +170,39 @@ export function useDashboardStats(filters: DashboardFilters, tenantId?: string |
     if (tagRoomIds) query = query.in("id", tagRoomIds.slice(0, 500));
     if (searchVisitorIds) query = query.in("visitor_id", searchVisitorIds.slice(0, 500));
 
-    const [roomsRes, attendantsRes] = await Promise.all([
+    // Snapshot query: current open rooms regardless of period filter (for "now" KPIs)
+    let snapshotQuery = supabase
+      .from("chat_rooms")
+      .select("status, attendant_id", { count: "exact" })
+      .in("status", ["waiting", "active"]);
+    if (effectiveAttendantIds) snapshotQuery = snapshotQuery.in("attendant_id", effectiveAttendantIds);
+    if (tenantId) snapshotQuery = snapshotQuery.eq("tenant_id", tenantId);
+
+    const [roomsRes, attendantsRes, snapshotRes] = await Promise.all([
       query,
       supabase.from("attendant_profiles").select("id, display_name, status"),
+      snapshotQuery,
     ]);
 
     let rooms = roomsRes.data ?? [];
     const allAttendants = attendantsRes.data ?? [];
+    const snapshotRooms = snapshotRes.data ?? [];
 
     if (categoryContactIds !== null) {
       rooms = rooms.filter(r => r.contact_id && categoryContactIds!.includes(r.contact_id));
     }
 
     const onlineAttendants = allAttendants.filter(a => a.status === "available" || a.status === "online").length;
+    const activeChats = snapshotRooms.filter(r => r.status === "active").length;
+    const waitingChats = snapshotRooms.filter(r => r.status === "waiting").length;
 
     if (rooms.length === 0) {
-      setStats({ ...EMPTY_STATS, onlineAttendants }); setLoading(false); return;
+      setStats({ ...EMPTY_STATS, onlineAttendants, activeChats, waitingChats }); setLoading(false); return;
     }
 
     const totalChats = rooms.length;
     const todayStr = now.toISOString().slice(0, 10);
     const chatsToday = rooms.filter(r => r.created_at?.slice(0, 10) === todayStr).length;
-    const activeChats = rooms.filter(r => r.status === "active").length;
-    const waitingChats = rooms.filter(r => r.status === "waiting").length;
 
     const withCsat = rooms.filter(r => r.csat_score != null);
     const avgCsat = withCsat.length > 0 ? Number((withCsat.reduce((s, r) => s + (r.csat_score ?? 0), 0) / withCsat.length).toFixed(1)) : null;
