@@ -12,10 +12,14 @@ export type LeadFormTexts = {
   successSub: string;
 };
 
-const leadSchema = z.object({
+const fullSchema = z.object({
   name: z.string().trim().min(2).max(100),
   email: z.string().trim().email().max(255),
   phone: z.string().trim().min(8).max(20),
+});
+
+const emailOnlySchema = z.object({
+  email: z.string().trim().email().max(255),
 });
 
 const LeadInput = ({
@@ -50,9 +54,11 @@ const LeadInput = ({
 interface LeadFormProps {
   t: LeadFormTexts;
   layout?: "inline" | "stacked";
+  /** "full" mantém o comportamento original (nome+email+telefone). "emailOnly" coleta só o email. Default: "full". */
+  mode?: "full" | "emailOnly";
 }
 
-const LeadForm = ({ t, layout = "stacked" }: LeadFormProps) => {
+const LeadForm = ({ t, layout = "stacked", mode = "full" }: LeadFormProps) => {
   const [loading, setLoading] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
@@ -66,7 +72,9 @@ const LeadForm = ({ t, layout = "stacked" }: LeadFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
-    const result = leadSchema.safeParse(form);
+
+    const schema = mode === "emailOnly" ? emailOnlySchema : fullSchema;
+    const result = schema.safeParse(form);
     if (!result.success) {
       const fe: Record<string, string> = {};
       result.error.errors.forEach((err) => {
@@ -78,10 +86,11 @@ const LeadForm = ({ t, layout = "stacked" }: LeadFormProps) => {
     setLoading(true);
     try {
       const params = new URLSearchParams(window.location.search);
+      const data = result.data as { name?: string; email: string; phone?: string };
       const { error } = await supabase.from("leads").insert({
-        name: result.data.name,
-        email: result.data.email,
-        phone: result.data.phone,
+        name: data.name ?? "",
+        email: data.email,
+        phone: data.phone ?? "",
         company: null,
         role: null,
         utm_source: params.get("utm_source") || "",
@@ -104,6 +113,36 @@ const LeadForm = ({ t, layout = "stacked" }: LeadFormProps) => {
   };
 
   const variant = layout === "inline" ? "inline" : "dark";
+
+  // Email-only renders a compact inline form regardless of layout prop
+  if (mode === "emailOnly") {
+    return (
+      <>
+        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 w-full">
+          <div className="flex-1 min-w-[200px]">
+            <LeadInput
+              placeholder={t.fieldEmail}
+              type="email"
+              value={form.email}
+              onChange={(v) => handleChange("email", v)}
+              variant={variant}
+            />
+            {errors.email && <p className="text-[10px] mt-0.5" style={{ color: "#FF5C5C" }}>{errors.email}</p>}
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-lg font-medium text-sm transition-all duration-150 hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap flex-shrink-0 px-6 py-3"
+            style={{ background: "#FF7A59", color: "#fff" }}
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ArrowRight className="w-4 h-4" /> {t.formCta}</>}
+          </button>
+          {errors.form && <p className="text-xs mt-2 text-center w-full" style={{ color: "#FF5C5C" }}>{errors.form}</p>}
+        </form>
+        {showPopup && <SuccessPopup t={t} onClose={() => setShowPopup(false)} />}
+      </>
+    );
+  }
 
   return (
     <>
@@ -136,26 +175,28 @@ const LeadForm = ({ t, layout = "stacked" }: LeadFormProps) => {
         {errors.form && <p className="text-xs mt-2 text-center" style={{ color: "#FF5C5C" }}>{errors.form}</p>}
       </form>
 
-      {showPopup && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}>
-          <div
-            className="relative rounded-2xl p-8 text-center max-w-sm mx-4"
-            style={{ background: "#131722", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 32px 80px rgba(0,0,0,0.6)" }}
-          >
-            <button onClick={() => setShowPopup(false)} className="absolute top-4 right-4 p-1 rounded-lg" style={{ color: "rgba(255,255,255,0.4)" }}>
-              <X className="w-4 h-4" />
-            </button>
-            <CheckCircle2 className="w-14 h-14 mx-auto mb-4" style={{ color: "#2ED47A" }} />
-            <h3 className="text-xl font-semibold text-white mb-2">{t.successTitle}</h3>
-            <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.5)" }}>{t.successSub}</p>
-            <button onClick={() => setShowPopup(false)} className="px-6 py-2.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-90" style={{ background: "#FF7A59", color: "#fff" }}>
-              OK
-            </button>
-          </div>
-        </div>
-      )}
+      {showPopup && <SuccessPopup t={t} onClose={() => setShowPopup(false)} />}
     </>
   );
 };
+
+const SuccessPopup = ({ t, onClose }: { t: LeadFormTexts; onClose: () => void }) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}>
+    <div
+      className="relative rounded-2xl p-8 text-center max-w-sm mx-4"
+      style={{ background: "#131722", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 32px 80px rgba(0,0,0,0.6)" }}
+    >
+      <button onClick={onClose} className="absolute top-4 right-4 p-1 rounded-lg" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <X className="w-4 h-4" />
+      </button>
+      <CheckCircle2 className="w-14 h-14 mx-auto mb-4" style={{ color: "#2ED47A" }} />
+      <h3 className="text-xl font-semibold text-white mb-2">{t.successTitle}</h3>
+      <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.5)" }}>{t.successSub}</p>
+      <button onClick={onClose} className="px-6 py-2.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-90" style={{ background: "#FF7A59", color: "#fff" }}>
+        OK
+      </button>
+    </div>
+  </div>
+);
 
 export default LeadForm;
