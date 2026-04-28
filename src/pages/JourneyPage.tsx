@@ -171,7 +171,7 @@ const JourneyPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#0F1115", fontFamily: "Manrope, sans-serif" }}>
-      <LandingNavbar t={t} isLoggedIn={isLoggedIn} onToggleLang={toggleLang} onCtaClick={scrollToForm} />
+      <LandingNavbar isLoggedIn={isLoggedIn} onCtaClick={scrollToForm} />
 
       {/* ── Platform Hero ─── */}
       <section className="py-20 px-4 text-center" style={{ background: "#0F1115" }}>
@@ -187,11 +187,14 @@ const JourneyPage = () => {
       <LandingTimeline t={t} />
       <LandingKanban t={t} />
       <LandingSocialProof t={{ socialTitle: t.socialTitle, socialSub: t.socialSub, metrics: t.socialMetrics }} />
-      <LandingFAQ t={{ faqTitle: t.faqTitle, faqItems: t.faqItems }} />
-      <LandingCTA t={t} formTexts={{ fieldName: t.fieldName, fieldEmail: t.fieldEmail, fieldPhone: t.fieldPhone, formCta: t.formCta, successTitle: t.successTitle, successSub: t.successSub }} />
-      <LandingFooter t={t} />
+      <LandingFAQ />
+      <LandingCTA />
+      <LandingFooter />
     </div>
   );
 };
+
+// Suppress unused var warning for toggleLang preserved above
+void toggleLang;
 
 export default JourneyPage;
