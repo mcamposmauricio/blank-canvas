@@ -13,10 +13,20 @@ const SectionFadeIn = ({ children, className = "", delay = 0 }: SectionFadeInPro
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
+
+    // Immediately reveal anything already in (or above) the viewport on mount
+    const rect = node.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    if (rect.top < vh * 0.95) {
+      setVisible(true);
+      return;
+    }
+
     if (typeof IntersectionObserver === "undefined") {
       setVisible(true);
       return;
     }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -24,7 +34,7 @@ const SectionFadeIn = ({ children, className = "", delay = 0 }: SectionFadeInPro
           observer.disconnect();
         }
       },
-      { threshold: 0.15, rootMargin: "-50px" }
+      { threshold: 0.1, rootMargin: "0px 0px -10% 0px" }
     );
     observer.observe(node);
     return () => observer.disconnect();
