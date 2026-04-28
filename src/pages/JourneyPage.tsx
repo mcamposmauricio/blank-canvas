@@ -194,7 +194,4 @@ const JourneyPage = () => {
   );
 };
 
-// Suppress unused var warning for toggleLang preserved above
-void toggleLang;
-
 export default JourneyPage;
